@@ -1,34 +1,51 @@
 includet("../skewt.jl")
-using DataFrames, Random, Statistics, StatsBase, Optim, Interpolations, Distributions
+using DataFrames, Random, Statistics, StatsBase, Optim, Distributions
 
 Random.seed!(0)
 
-ds = let
-  μ_grid  = collect(range(log(1.0001), log(1.8); length=2));
-  σ_grid  = collect(exp.(range(log(0.001), log(1); length=10)));
-  ν_grid  = collect(exp.(range(log(2.7), log(6.0); length=5)));
-  λ_grid  = collect((range(-0.2, 0.1; length=10)));
-  # hp_grid = collect(exp.(range(log(0.99), log(0.9999); length=3)));
-  hp_grid = [0.9997]
+σ_range = (0.001,  0.5)
+ν_range = (2.7,    4.0)
+λ_range = (-0.1,   0.1)
+hp_range = 0.9999
 
-  ds = DataFrame([(; μ, σ, ν, λ, hp) for μ in μ_grid, σ in σ_grid, ν in ν_grid, λ in λ_grid, hp in hp_grid])
+Q_skewt_mean_exp_adj = [
+  -2.5293139635108637, -0.6573930578555529, 1.9699792080439948, -0.12806815272246, -2.9795712225102453,
+  -0.2067505291778299, -1.0755334965951282, -0.37237840421331136, 2.045224620758677, -0.005350161835873002,
+  0.0007996593124777508, -0.022282241134172886, 0.1247552899561173, 0.15371297791271646, -0.7035997759098427
+] # re = 1.0008
 
-  ds.d = SkewT.(0.0, ds.σ, ds.ν, ds.λ)
-  ds.h = quantile.(ds.d, ds.hp)
-  ds.q085 = quantile.(ds.d, 0.85)
-  ds.q099 = quantile.(ds.d, 0.99)
+skewt_mean_exp_adj(σ, ν, λ, hp, Q, q085=nothing, q099=nothing; skip_check=true) = begin
+  if q085 === nothing || q099 === nothing
+    d0 = SkewT(0.0, σ, ν, λ)
+    q085 = quantile(d0, 0.85)
+    q099 = quantile(d0, 0.99)
+  end
 
-  ds.mean_exp = [mean_exp(d; l=log(1e-6), h=ds.h[i]) for (i, d) in enumerate(ds.d)];
-  ds
-end
+  if !skip_check
+    @assert σ_range[1] <= σ <= σ_range[2] "σ out of range"
+    @assert ν_range[1] <= ν <= ν_range[2] "ν out of range"
+    @assert λ_range[1] <= λ <= λ_range[2] "λ out of range"
+    @assert hp ≈ hp_range "hp out of range"
+  end
 
-fit_exp_model(ds) = begin
-  residuals(Q) = log.(ds.mean_exp) .- log.(mean_exp_model.(ds.d, ds.hp, Ref(Q), ds.q085, ds.q099))
+  lν = log(ν-2.5)
+  a, b = q085, q099
+  la, lb = log(a), log(b)
+
+  m1 = exp(Q[1] + Q[2]lν + Q[3]λ + Q[4]lν^2 + Q[5]λ^2 + Q[6]*lν*λ + Q[7]*la + Q[8]*la^2 + Q[9]*lb)
+  m2 = Q[10] + Q[11]lν + Q[12]λ + Q[13]*a + Q[14]*b
+  (σ*m1)^2 + σ*m2
+end;
+
+fit_skewt_mean_exp_adj(ds) = begin
+  residuals(Q) = log.(ds.emean) .- (
+    ds.μ + skewt_mean_exp_adj.(ds.σ, ds.ν, ds.λ, ds.hp, Ref(Q), ds.q085, ds.q099, skip_check=true)
+  )
   goal(Q)      = 100000*mean(residuals(Q).^2)
   penalty(Q)   = (1/1000000)mean(Q[2:end].^2)
   loss(Q)      = goal(Q) #+ penalty(Q)
 
-  inits = [randn(Qn) for _ in 1:10]
+  inits = [randn(15) for _ in 1:10]
   rs = [optimize(loss, init, LBFGS(); autodiff=:forward) for init in inits]
   rs = filter(Optim.converged, rs)
   isempty(rs) && error("can't fit")
@@ -36,47 +53,37 @@ fit_exp_model(ds) = begin
   mins = map(Optim.minimum, rs)
   Q = Optim.minimizer(rs[argmin(mins)])
 
-  re = abs.(residuals(Q))
-  re_i = argmax(re)
-  println((; ds[re_i, :]..., model=mean_exp_model(ds.d[re_i], ds.hp[re_i], Q, ds.q085[re_i], ds.q099[re_i]), re=re[re_i]))
+  # re = abs.(residuals(Q))
+  # re_i = argmax(re)
+  # println((; ds[re_i, :]..., model=emean_model(ds.d[re_i], ds.hp[re_i], Q, ds.q085[re_i], ds.q099[re_i]), re=re[re_i]))
 
   re = round(exp(maximum(abs.(residuals(Q)))); digits=4)
   println("Fit re=$re, goal=$(round(goal(Q); digits=4)), penalty=$(round(penalty(Q); digits=4))")
 
   return Q, re
-end
-
-Qn = 15;
-mean_exp_model(d, hp, Q, q085=quantile(d, 0.85), q099=quantile(d, 0.99)) = begin
-  (; μ, σ, ν, λ) = d
-
-  lν = log(ν-2.5)
-  a, b = (q085 - μ), (q099 - μ)
-  la, lb = log(a), log(b)
-
-  m1 = exp(Q[1] + Q[2]lν + Q[3]λ + Q[4]lν^2 + Q[5]λ^2 + Q[6]*lν*λ + Q[7]*la + Q[8]*la^2 + Q[9]*lb)
-  m2 = Q[10] + Q[11]lν + Q[12]λ + Q[13]*a + Q[14]*b
-  exp(μ + (σ*m1)^2 + σ*m2)
 end;
 
-Q, re = fit_exp_model(ds)
+Q, re = fit_skewt_mean_exp_adj(ds)
 
-a=1
-# loss
+ds = let
+  e = 1e-6
+  μ_grid  = [0.0, 0.5]; # Could be any value, not restricted
+  σ_grid  = collect(exp.(range(log(σ_range[1]+e), log(σ_range[2]-e); length=20)));
+  ν_grid  = collect(exp.(range(log(ν_range[1]+e), log(ν_range[2]-e); length=10)));
+  λ_grid  = collect(range(λ_range...; length=10));
+  hp_grid = [hp_range]
 
+  ds = DataFrame([(; μ, σ, ν, λ, hp) for μ in μ_grid, σ in σ_grid, ν in ν_grid, λ in λ_grid, hp in hp_grid])
 
-# λ_model(period, vol_q) = λ_model(period, vol_q, Q_λ);
+  ds.d = SkewT.(ds.μ, ds.σ, ds.ν, ds.λ)
+  ds.h = quantile.(ds.d, ds.hp)
 
-# # mean_exp_model(μ, σ, ν, λ, hp, Q) = begin
-# #   exp(Q[1]μ + ???
-# # end;
+  d0 = SkewT.(0.0, ds.σ, ds.ν, ds.λ)
+  ds.q085 = quantile.(d0, 0.85)
+  ds.q099 = quantile.(d0, 0.99)
 
+  ds.emean = [mean_exp(d; l=log(1e-6), h=ds.h[i]) for (i, d) in enumerate(ds.d)];
+  ds
+end
 
-# mean_log(mean_exp, σνλ, approx) = begin
-#   (σ, ν, λ) = σνλ
-#   ...
-# end
-
-# approx = calc_mean_log_approx(-0.1:0.1:0.1, 0.1:0.1:2.0, 2.5:0.1:4.0, -0.5:0.1:0.5; lp=1e-8, 1-1e-4)
-
-# mean_log(0.5, (0.1, 3.0, -0.1), approx)
+Q, re = fit_lmean_model(ds)
