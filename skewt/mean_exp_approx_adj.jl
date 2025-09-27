@@ -22,8 +22,7 @@ skewt_mean_exp_adj(σ, ν, λ, hp, Q, q085=nothing, q099=nothing) = begin
 
   if q085 === nothing || q099 === nothing
     d0 = SkewT(0.0, σ, ν, λ)
-    q085 = quantile(d0, 0.85)
-    q099 = quantile(d0, 0.99)
+    q085, q099 = quantile(d0, 0.85), quantile(d0, 0.99)
   end
 
   lν = log(ν-2.5)
