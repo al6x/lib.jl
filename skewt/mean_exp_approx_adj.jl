@@ -26,8 +26,7 @@ skewt_mean_exp_adj(σ, ν, λ, hp, Q, q085=nothing, q099=nothing) = begin
   end
 
   lν = log(ν-2.5)
-  a, b = q085, q099
-  la, lb = log(a), log(b)
+  a, b = q085, q099; la, lb = log(a), log(b)
 
   m1 = exp(Q[1] + Q[2]lν + Q[3]λ + Q[4]lν^2 + Q[5]λ^2 + Q[6]*lν*λ + Q[7]*la + Q[8]*la^2 + Q[9]*lb)
   m2 = Q[10] + Q[11]lν + Q[12]λ + Q[13]*a + Q[14]*b
