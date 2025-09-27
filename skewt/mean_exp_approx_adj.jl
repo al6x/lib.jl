@@ -14,18 +14,16 @@ Q_skewt_mean_exp_adj = [
   0.0007996593124777508, -0.022282241134172886, 0.1247552899561173, 0.15371297791271646, -0.7035997759098427
 ] # re = 1.0008
 
-skewt_mean_exp_adj(σ, ν, λ, hp, Q, q085=nothing, q099=nothing; skip_check=true) = begin
+skewt_mean_exp_adj(σ, ν, λ, hp, Q, q085=nothing, q099=nothing) = begin
+  @assert σ_range[1] <= σ <= σ_range[2] "σ out of range"
+  @assert ν_range[1] <= ν <= ν_range[2] "ν out of range"
+  @assert λ_range[1] <= λ <= λ_range[2] "λ out of range"
+  @assert hp ≈ hp_range "hp out of range"
+
   if q085 === nothing || q099 === nothing
     d0 = SkewT(0.0, σ, ν, λ)
     q085 = quantile(d0, 0.85)
     q099 = quantile(d0, 0.99)
-  end
-
-  if !skip_check
-    @assert σ_range[1] <= σ <= σ_range[2] "σ out of range"
-    @assert ν_range[1] <= ν <= ν_range[2] "ν out of range"
-    @assert λ_range[1] <= λ <= λ_range[2] "λ out of range"
-    @assert hp ≈ hp_range "hp out of range"
   end
 
   lν = log(ν-2.5)
@@ -39,7 +37,7 @@ end;
 
 fit_skewt_mean_exp_adj(ds) = begin
   residuals(Q) = log.(ds.emean) .- (
-    ds.μ + skewt_mean_exp_adj.(ds.σ, ds.ν, ds.λ, ds.hp, Ref(Q), ds.q085, ds.q099, skip_check=true)
+    ds.μ + skewt_mean_exp_adj.(ds.σ, ds.ν, ds.λ, ds.hp, Ref(Q), ds.q085, ds.q099)
   )
   goal(Q)      = 100000*mean(residuals(Q).^2)
   penalty(Q)   = (1/1000000)mean(Q[2:end].^2)

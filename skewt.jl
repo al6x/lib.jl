@@ -130,8 +130,8 @@ mean_exp(d::SkewT; l::Real, h::Real) = begin
   QuadGK.quadgk(f, l, h)[1]
 end
 
-# Fast approximate solution for adj = log E[e^x] - μ
-# see skewt/fit_skewt_mean_exp.jl
+# Fast approximate solution for E[e^x] with truncated upper tail and its inverse
+# as `adj = log E[e^x] - μ`. Details skewt/fit_skewt_mean_exp.jl
 make_mean_exp_approx_adj() = begin
   σ_range = (0.001,  0.5)
   ν_range = (2.7,    4.0)
@@ -144,18 +144,16 @@ make_mean_exp_approx_adj() = begin
     0.0007996593124777508, -0.022282241134172886, 0.1247552899561173, 0.15371297791271646, -0.7035997759098427
   ] # re = 1.0008
 
-  skewt_mean_exp_adj(σ, ν, λ, hp, Q, q085=nothing, q099=nothing; skip_check=true) = begin
+  skewt_mean_exp_adj(σ, ν, λ, hp, Q, q085=nothing, q099=nothing) = begin
+    @assert σ_range[1] <= σ <= σ_range[2] "σ out of range"
+    @assert ν_range[1] <= ν <= ν_range[2] "ν out of range"
+    @assert λ_range[1] <= λ <= λ_range[2] "λ out of range"
+    @assert hp ≈ hp_range "hp out of range"
+
     if q085 === nothing || q099 === nothing
       d0 = SkewT(0.0, σ, ν, λ)
       q085 = quantile(d0, 0.85)
       q099 = quantile(d0, 0.99)
-    end
-
-    if !skip_check
-      @assert σ_range[1] <= σ <= σ_range[2] "σ out of range"
-      @assert ν_range[1] <= ν <= ν_range[2] "ν out of range"
-      @assert λ_range[1] <= λ <= λ_range[2] "λ out of range"
-      @assert hp ≈ hp_range "hp out of range"
     end
 
     lν = log(ν-2.5)
@@ -167,5 +165,5 @@ make_mean_exp_approx_adj() = begin
     (σ*m1)^2 + σ*m2
   end;
 
-  (σ, ν, λ, hp) -> skewt_mean_exp_adj(σ, ν, λ, hp, Q_skewt_mean_exp_adj; skip_check=false)
+  (σ, ν, λ, hp) -> skewt_mean_exp_adj(σ, ν, λ, hp, Q_skewt_mean_exp_adj)
 end
