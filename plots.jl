@@ -1,7 +1,7 @@
-# coolwarm, icefire
+# redblue, coolwarm, icefire
 plot_xyc_by(
   title, ds; x, y, y2=nothing, color=nothing, by=nothing, detail=nothing,
-  xdomain=nothing, ydomain=nothing, palette="redblue",
+  xdomain=nothing, ydomain=nothing, palette="viridis",
   xscale=nothing, yscale=nothing, pointsize=30, mark=:line_with_points, mark2=:line_with_points,
   width=1024, ratio=1.5
 ) = begin
@@ -51,7 +51,8 @@ plot_xyc_by(
     mark_props2 =
       mark2 == :line ?             (type=:line, clip=true, strokeDash=[4,4]) :
       mark2 == :line_with_points ? (type=:line, clip=true, strokeDash=[4,4], point=true) :
-      (type=:point, clip=true, shape=:diamond)
+      mark2 == :diamond          ? (type=:point, clip=true, shape=:diamond) :
+      (type=mark2, clip=true,)
     encoding2 = (;
       encoding1...,
       y = (field=y2, type=:quantitative, scale=yscale_props),

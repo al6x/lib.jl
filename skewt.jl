@@ -4,12 +4,16 @@ import Random: rand
 import Statistics: mean, std
 import QuadGK, Interpolations
 
-struct SkewT{T <: Real} <: Distributions.ContinuousUnivariateDistribution
-  μ::T; σ::T; ν::T; λ::T
-  a::T; b::T; c::T
+# struct SkewT{T <: Real} <: Distributions.ContinuousUnivariateDistribution
+#   μ::T; σ::T; ν::T; λ::T
+#   a::T; b::T; c::T
+# end
+struct SkewT <: Distributions.ContinuousUnivariateDistribution
+  μ::Real; σ::Real; ν::Real; λ::Real
+  a::Real; b::Real; c::Real
 end
 
-function SkewT(μ::T, σ::T, ν::T, λ::T) where {T <: Real}
+function SkewT(μ::Real, σ::Real, ν::Real, λ::Real) #where {T <: Real}
   σ > 0       || throw(DomainError(σ, "σ must be > 0"))
   ν > 2.05    || throw(DomainError(ν, "ν must be > 2.05"))
   abs(λ) < 1  || throw(DomainError(λ, "|λ| must be < 1"))
@@ -134,15 +138,15 @@ end
 # as `adj = log E[e^x] - μ`. Details skewt/fit_skewt_mean_exp.jl
 make_mean_exp_approx_adj() = begin
   σ_range = (0.001,  0.5)
-  ν_range = (2.7,    4.0)
+  ν_range = (2.7,    10.0)
   λ_range = (-0.1,   0.1)
   hp_range = 0.9999
 
   Q = [
-    -2.5293139635108637, -0.6573930578555529, 1.9699792080439948, -0.12806815272246, -2.9795712225102453,
-    -0.2067505291778299, -1.0755334965951282, -0.37237840421331136, 2.045224620758677, -0.005350161835873002,
-    0.0007996593124777508, -0.022282241134172886, 0.1247552899561173, 0.15371297791271646, -0.7035997759098427
-  ] # re = 1.0008
+    -9.784757129983294, 0.22962024441216067, -2.9396608958256905, 0.062033597122393314, 0.5260265105943711,
+    0.4288006423257013, -7.091982222193769, -0.3451145220530314, 8.061066984268344, -0.003940296718428804,
+    0.0010526088347396069, -0.023738010983512296, 0.14907271265816044, 0.14344803112579835, -0.7775383881678878
+  ] # re = 1.001
 
   skewt_mean_exp_adj(σ, ν, λ, hp, Q, q085=nothing, q099=nothing) = begin
     @assert σ_range[1] <= σ <= σ_range[2] "σ out of range"

@@ -3,16 +3,37 @@ using DataFrames, Random, Statistics, StatsBase, Optim, Distributions
 
 Random.seed!(0)
 
-σ_range = (0.001,  0.5)
-ν_range = (2.7,    4.0)
-λ_range = (-0.1,   0.1)
-hp_range = 0.9999
+σ_range = (0.001,  0.5);
+ν_range = (2.7,    10.0);
+λ_range = (-0.1,   0.1);
+hp_range = 0.9999;
 
-Q_skewt_mean_exp_adj = [
-  -2.5293139635108637, -0.6573930578555529, 1.9699792080439948, -0.12806815272246, -2.9795712225102453,
-  -0.2067505291778299, -1.0755334965951282, -0.37237840421331136, 2.045224620758677, -0.005350161835873002,
-  0.0007996593124777508, -0.022282241134172886, 0.1247552899561173, 0.15371297791271646, -0.7035997759098427
-] # re = 1.0008
+ds = let
+  e = 1e-6
+  μ_grid  = [0.0, 0.5]; # Could be any value, not restricted
+  σ_grid  = collect(exp.(range(log(σ_range[1]+e), log(σ_range[2]-e); length=20)));
+  ν_grid  = collect(exp.(range(log(ν_range[1]+e), log(ν_range[2]-e); length=10)));
+  λ_grid  = collect(range(λ_range...; length=10));
+  hp_grid = [hp_range]
+
+  ds = DataFrame([(; μ, σ, ν, λ, hp) for μ in μ_grid, σ in σ_grid, ν in ν_grid, λ in λ_grid, hp in hp_grid])
+
+  ds.d = SkewT.(ds.μ, ds.σ, ds.ν, ds.λ)
+  ds.h = quantile.(ds.d, ds.hp)
+
+  d0 = SkewT.(0.0, ds.σ, ds.ν, ds.λ)
+  ds.q085 = quantile.(d0, 0.85)
+  ds.q099 = quantile.(d0, 0.99)
+
+  ds.emean = [mean_exp(d; l=log(1e-6), h=ds.h[i]) for (i, d) in enumerate(ds.d)];
+  ds
+end
+
+# Q_skewt_mean_exp_adj = [
+#   -2.5293139635108637, -0.6573930578555529, 1.9699792080439948, -0.12806815272246, -2.9795712225102453,
+#   -0.2067505291778299, -1.0755334965951282, -0.37237840421331136, 2.045224620758677, -0.005350161835873002,
+#   0.0007996593124777508, -0.022282241134172886, 0.1247552899561173, 0.15371297791271646, -0.7035997759098427
+# ] # re = 1.0008
 
 skewt_mean_exp_adj(σ, ν, λ, hp, Q, q085=nothing, q099=nothing) = begin
   @assert σ_range[1] <= σ <= σ_range[2] "σ out of range"
@@ -60,26 +81,3 @@ fit_skewt_mean_exp_adj(ds) = begin
 end;
 
 Q, re = fit_skewt_mean_exp_adj(ds)
-
-ds = let
-  e = 1e-6
-  μ_grid  = [0.0, 0.5]; # Could be any value, not restricted
-  σ_grid  = collect(exp.(range(log(σ_range[1]+e), log(σ_range[2]-e); length=20)));
-  ν_grid  = collect(exp.(range(log(ν_range[1]+e), log(ν_range[2]-e); length=10)));
-  λ_grid  = collect(range(λ_range...; length=10));
-  hp_grid = [hp_range]
-
-  ds = DataFrame([(; μ, σ, ν, λ, hp) for μ in μ_grid, σ in σ_grid, ν in ν_grid, λ in λ_grid, hp in hp_grid])
-
-  ds.d = SkewT.(ds.μ, ds.σ, ds.ν, ds.λ)
-  ds.h = quantile.(ds.d, ds.hp)
-
-  d0 = SkewT.(0.0, ds.σ, ds.ν, ds.λ)
-  ds.q085 = quantile.(d0, 0.85)
-  ds.q099 = quantile.(d0, 0.99)
-
-  ds.emean = [mean_exp(d; l=log(1e-6), h=ds.h[i]) for (i, d) in enumerate(ds.d)];
-  ds
-end
-
-Q, re = fit_lmean_model(ds)
