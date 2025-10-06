@@ -1,7 +1,7 @@
 module Lib
 
 import Printf, Optim, CSV
-using Statistics
+using Statistics, Random
 using SpecialFunctions: loggamma
 
 export dedent, configure!, unzip, flatten, spread,
@@ -76,5 +76,15 @@ end
 end
 
 Base.round(x::NamedTuple; opts...) = (; (k => round(v; opts...) for (k,v) in pairs(x))...)
+
+Random.seed!(op::Function, seed::Integer) = begin
+  state = copy(Random.default_rng())
+  try
+    Random.seed!(seed)
+    op()
+  finally
+    copy!(Random.default_rng(), state)
+  end
+end
 
 end

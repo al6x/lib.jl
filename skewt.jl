@@ -4,16 +4,12 @@ import Random: rand
 import Statistics: mean, std
 import QuadGK, Interpolations
 
-# struct SkewT{T <: Real} <: Distributions.ContinuousUnivariateDistribution
-#   μ::T; σ::T; ν::T; λ::T
-#   a::T; b::T; c::T
-# end
 struct SkewT <: Distributions.ContinuousUnivariateDistribution
   μ::Real; σ::Real; ν::Real; λ::Real
   a::Real; b::Real; c::Real
 end
 
-function SkewT(μ::Real, σ::Real, ν::Real, λ::Real) #where {T <: Real}
+function SkewT(μ::Real, σ::Real, ν::Real, λ::Real)
   σ > 0       || throw(DomainError(σ, "σ must be > 0"))
   ν > 2.05    || throw(DomainError(ν, "ν must be > 2.05"))
   abs(λ) < 1  || throw(DomainError(λ, "|λ| must be < 1"))
@@ -27,6 +23,22 @@ end
 
 logpdf(d::SkewT, x::Real) = begin
   (; μ, σ, λ, ν, a, b, c) = d
+  z = (x - μ) / σ
+  s = sign(z + a/b)
+  llf = ((b*z + a)/(1 + s*λ))^2
+  zlogpdf = log(b) + c - ((ν + 1)/2) * log(1 + llf/(ν - 2))
+  zlogpdf - log(σ)
+end
+
+skewt_logpdf(μ::Real, σ::Real, ν::Real, λ::Real, x::Real) = begin
+  σ > 0       || throw(DomainError(σ, "σ must be > 0"))
+  ν > 2.05    || throw(DomainError(ν, "ν must be > 2.05"))
+  abs(λ) < 1  || throw(DomainError(λ, "|λ| must be < 1"))
+
+  c = SpecialFunctions.loggamma((ν + 1)/2) - SpecialFunctions.loggamma(ν/2) - 0.5*log(pi*(ν - 2))
+  a = 4*λ*exp(c)*(ν - 2)/(ν - 1)
+  b = sqrt(1 + 3*λ^2 - a^2)
+
   z = (x - μ) / σ
   s = sign(z + a/b)
   llf = ((b*z + a)/(1 + s*λ))^2
@@ -134,38 +146,32 @@ mean_exp(d::SkewT; l::Real, h::Real) = begin
   QuadGK.quadgk(f, l, h)[1]
 end
 
-# Fast approximate solution for E[e^x] with truncated upper tail and its inverse
-# as `adj = log E[e^x] - μ`. Details skewt/fit_skewt_mean_exp.jl
-make_mean_exp_approx_adj() = begin
-  σ_range = (0.001,  0.5)
-  ν_range = (2.7,    10.0)
-  λ_range = (-0.1,   0.1)
-  hp_range = 0.9999
+# Fast approx for `adj = log E[e^x] - μ`, with truncated upper tail at 0.9999 quantile.
+# Details skewt/fit_skewt_mean_exp.jl
+@inline skewt_mean_exp_adj(σ, ν, λ) = begin
+  # Truncated at 0.9999 quantile
+  # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
+  @assert 2.7 <= ν <= 8.0 "ν out of range"
+  @assert -0.1 <= λ <= 0.05 "λ out of range"
 
-  Q = [
-    -9.784757129983294, 0.22962024441216067, -2.9396608958256905, 0.062033597122393314, 0.5260265105943711,
-    0.4288006423257013, -7.091982222193769, -0.3451145220530314, 8.061066984268344, -0.003940296718428804,
-    0.0010526088347396069, -0.023738010983512296, 0.14907271265816044, 0.14344803112579835, -0.7775383881678878
-  ] # re = 1.001
+  lν = log(ν - 2.5)
+  m1 = exp(
+    -0.648218866392912 -0.012407729414709195*lν + 0.8718567522522687*λ
+    -0.006870895633471439*lν^2 + 0.0054997790794226705*λ^2 +
+    -0.25093014015464354*lν*λ
+  )
+  m2 = -0.00707318980863869 + 0.0032400538810423035*lν -0.03602921073340562*λ
 
-  skewt_mean_exp_adj(σ, ν, λ, hp, Q, q085=nothing, q099=nothing) = begin
-    @assert σ_range[1] <= σ <= σ_range[2] "σ out of range"
-    @assert ν_range[1] <= ν <= ν_range[2] "ν out of range"
-    @assert λ_range[1] <= λ <= λ_range[2] "λ out of range"
-    @assert hp ≈ hp_range "hp out of range"
+  -5.373827757175762e-5 + m1*σ^2 + m2*σ
+end;
 
-    if q085 === nothing || q099 === nothing
-      d0 = SkewT(0.0, σ, ν, λ)
-      q085, q099 = quantile(d0, 0.85), quantile(d0, 0.99)
-    end
+# Very simple approx for `adj = log E[e^x] - μ`, with truncated upper tail at 0.9999 quantile.
+# Details skewt/fit_skewt_mean_exp.jl
+skewt_mean_exp_adj_simple(σ, ν, λ) = begin
+  # Truncated at 0.9999 quantile
+  # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
+  # @assert 2.7 <= ν <= 8.0 "ν out of range"
+  # @assert -0.1 <= λ <= 0.05 "λ out of range"
 
-    lν = log(ν-2.5)
-    a, b = q085, q099; la, lb = log(a), log(b)
-
-    m1 = exp(Q[1] + Q[2]lν + Q[3]λ + Q[4]lν^2 + Q[5]λ^2 + Q[6]*lν*λ + Q[7]*la + Q[8]*la^2 + Q[9]*lb)
-    m2 = Q[10] + Q[11]lν + Q[12]λ + Q[13]*a + Q[14]*b
-    (σ*m1)^2 + σ*m2
-  end;
-
-  (σ, ν, λ, hp) -> skewt_mean_exp_adj(σ, ν, λ, hp, Q)
-end
+  (0.9483651253382737 + 0.007696275121991037*ν + 0.4646473003090392*λ)*σ^2/2
+end;
