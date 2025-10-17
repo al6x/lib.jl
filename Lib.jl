@@ -40,7 +40,7 @@ dedent(s::AbstractString) = begin
   join([isempty(strip(l)) ? "" : l[min_indent+1:end] for l in lines], "\n")
 end
 
-unzip(rows::AbstractVector{T}) where {T<:Union{Tuple,AbstractVector}} = begin
+unzip(rows::AbstractVector{<:Union{Tuple,AbstractVector}}) = begin
   isempty(rows) && error("empty input")
   N = length(first(rows))
   return ntuple(j -> getindex.(rows, j), N)
@@ -48,7 +48,7 @@ end
 
 unzip(rows::Base.Generator) = unzip(collect(rows))
 
-flatten(v::AbstractVector{<:AbstractVector{T}}) where {T} = collect(Iterators.flatten(v))
+flatten(v::AbstractVector{<:AbstractVector}) = collect(Iterators.flatten(v))
 
 mutable struct LibConfig show_round::Int end
 const config = Ref{Union{LibConfig, Nothing}}(nothing)
@@ -62,7 +62,7 @@ configure!()
 #   Printf.@printf(io, "%.*f", config[].show_round, f)
 # end
 
-export tdist_logpdf
+export tdist_logpdf, tdist_logpdf_std
 
 @inline tdist_logpdf(ν, x) = begin
   @assert ν > 1 "ν must be > 1"
@@ -70,9 +70,15 @@ export tdist_logpdf
   c - (ν+1)/2 * log1p(x^2/ν)
 end
 
-@inline tdist_logpdf(μ, σ, ν, x) = begin
+@inline tdist_logpdf(μ, scale, ν, x) = begin
+  @assert scale > 0 "σ must be > 0"
+  tdist_logpdf(ν, (x-μ)/scale) - log(scale)
+end
+
+@inline tdist_logpdf_std(μ, σ, ν, x) = begin
   @assert σ > 0 "σ must be > 0"
-  tdist_logpdf(ν, (x-μ)/σ) - log(σ)
+  scale = σ * sqrt((ν - 2) / ν)
+  tdist_logpdf(ν, (x-μ)/scale) - log(scale)
 end
 
 Base.round(x::NamedTuple; opts...) = (; (k => round(v; opts...) for (k,v) in pairs(x))...)
@@ -85,6 +91,25 @@ Random.seed!(op::Function, seed::Integer) = begin
   finally
     copy!(Random.default_rng(), state)
   end
+end
+
+ewa(x::AbstractVector{<:Union{Missing,Real}}, α::Real; fill_missing=false) = begin
+  @assert 0 < α < 1 "α must be in (0,1)"
+  y, n, i = similar(x), length(x), 1
+  @inbounds while i <= n && x[i] === missing
+    y[i] = missing; i += 1
+  end
+  if i <= n
+    y[i] = s = x[i]; i += 1
+    @inbounds for j in i:n
+      if x[j] === missing
+        y[j] = fill_missing ? s : missing
+      else
+        y[j] = s = α * x[j] + (1 - α) * s
+      end
+    end
+  end
+  y
 end
 
 end

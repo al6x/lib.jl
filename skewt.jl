@@ -4,12 +4,13 @@ import Random: rand
 import Statistics: mean, std
 import QuadGK, Interpolations
 
-struct SkewT <: Distributions.ContinuousUnivariateDistribution
-  μ::Real; σ::Real; ν::Real; λ::Real
-  a::Real; b::Real; c::Real
+struct SkewT{T<:Real} <: Distributions.ContinuousUnivariateDistribution
+  μ::T; σ::T; ν::T; λ::T
+  a::T; b::T; c::T
 end
 
-function SkewT(μ::Real, σ::Real, ν::Real, λ::Real)
+
+function SkewT(μ::T, σ::T, ν::T, λ::T) where {T<:Real}
   σ > 0       || throw(DomainError(σ, "σ must be > 0"))
   ν > 2.05    || throw(DomainError(ν, "ν must be > 2.05"))
   abs(λ) < 1  || throw(DomainError(λ, "|λ| must be < 1"))
@@ -21,7 +22,7 @@ function SkewT(μ::Real, σ::Real, ν::Real, λ::Real)
   SkewT(μ, σ, ν, λ, a, b, c)
 end
 
-logpdf(d::SkewT, x::Real) = begin
+@inline logpdf(d::SkewT, x::Real) = begin
   (; μ, σ, λ, ν, a, b, c) = d
   z = (x - μ) / σ
   s = sign(z + a/b)
@@ -30,7 +31,7 @@ logpdf(d::SkewT, x::Real) = begin
   zlogpdf - log(σ)
 end
 
-skewt_logpdf(μ::Real, σ::Real, ν::Real, λ::Real, x::Real) = begin
+@inline skewt_logpdf(μ::Real, σ::Real, ν::Real, λ::Real, x::Real) = begin
   σ > 0       || throw(DomainError(σ, "σ must be > 0"))
   ν > 2.05    || throw(DomainError(ν, "ν must be > 2.05"))
   abs(λ) < 1  || throw(DomainError(λ, "|λ| must be < 1"))
@@ -114,18 +115,18 @@ fit_mle_fixed(::Type{SkewT}, x::AbstractVector{<:Real}; fix::NamedTuple) = begin
   init = [init_named[k] for k in setdiff(keys(init_named), keys(fix))]
   init = Float64.(init) # To avoid mixing Dual with Float64
 
-  @inline decode(θ) = begin
+  @inline decode(Q) = begin
     i=0
-    μ = haskey(fix,:μ) ? fix[:μ] : θ[i+=1]
-    σ = haskey(fix,:σ) ? fix[:σ] : exp(θ[i+=1])
-    ν = haskey(fix,:ν) ? fix[:ν] : exp(θ[i+=1]) + min_ν
-    λ = haskey(fix,:λ) ? fix[:λ] : tanh(θ[i+=1])
+    μ = haskey(fix,:μ) ? fix[:μ] : Q[i+=1]
+    σ = haskey(fix,:σ) ? fix[:σ] : exp(Q[i+=1])
+    ν = haskey(fix,:ν) ? fix[:ν] : exp(Q[i+=1]) + min_ν
+    λ = haskey(fix,:λ) ? fix[:λ] : tanh(Q[i+=1])
     μ, σ, ν, λ = promote(μ, σ, ν, λ) # To avoid mixing Dual with Float64
     (μ,σ,ν,λ)
   end
 
-  nll(θ) = begin
-    μ, σ, ν, λ = decode(θ)
+  nll(Q) = begin
+    μ, σ, ν, λ = decode(Q)
     if σ < 1e-12 || ν <= min_ν || abs(λ) >= 1 || ν > 100 return Inf end
     d = SkewT(μ, σ, ν, λ)
     -sum(logpdf.(Ref(d), x))
@@ -133,22 +134,22 @@ fit_mle_fixed(::Type{SkewT}, x::AbstractVector{<:Real}; fix::NamedTuple) = begin
 
   res = Optim.optimize(nll, init, Optim.BFGS(); autodiff = :forward)
 
-  θ = Optim.converged(res) ? Optim.minimizer(res) : error("Can't estimate SkewT")
-  SkewT(decode(θ)...)
+  Q = Optim.converged(res) ? Optim.minimizer(res) : error("Can't estimate SkewT")
+  SkewT(decode(Q)...)
 end
 
 fit_mle(::Type{SkewT}, x::AbstractVector{<:Real}, fix::Union{Nothing,NamedTuple}=nothing) = begin
   fix === nothing ? fit_mle_free(SkewT, x) : fit_mle_fixed(SkewT, x; fix)
 end
 
-mean_exp(d::SkewT; l::Real, h::Real) = begin
+mean_exp(d::SkewT; l::T, h::T) where {T<:Real} = begin
   f(x) = pdf(d, x) * exp(x)
   QuadGK.quadgk(f, l, h)[1]
 end
 
 # Fast approx for `adj = log E[e^x] - μ`, with truncated upper tail at 0.9999 quantile.
 # Details skewt/fit_skewt_mean_exp.jl
-@inline skewt_mean_exp_adj(σ, ν, λ) = begin
+@inline skewt_mean_exp_adj(σ::T, ν::T, λ::T) where {T<:Real} = begin
   # Truncated at 0.9999 quantile
   # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
   @assert 2.7 <= ν <= 8.0 "ν out of range"
@@ -167,7 +168,7 @@ end;
 
 # Very simple approx for `adj = log E[e^x] - μ`, with truncated upper tail at 0.9999 quantile.
 # Details skewt/fit_skewt_mean_exp.jl
-skewt_mean_exp_adj_simple(σ, ν, λ) = begin
+skewt_mean_exp_adj_simple(σ::T, ν::T, λ::T) where {T<:Real} = begin
   # Truncated at 0.9999 quantile
   # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
   # @assert 2.7 <= ν <= 8.0 "ν out of range"
@@ -175,3 +176,31 @@ skewt_mean_exp_adj_simple(σ, ν, λ) = begin
 
   (0.9483651253382737 + 0.007696275121991037*ν + 0.4646473003090392*λ)*σ^2/2
 end;
+
+
+# Keeping just as a comparison, bounded version is twice slower as reparametrised
+# version `fit_mle_free`.
+fit_mle_free_bounded(::Type{SkewT}, x::AbstractVector{<:Real}) = begin
+  lower = [-Inf, 1e-12, 2.051, -1.0+1e-6]
+  upper = [ Inf, Inf,   Inf,    1.0-1e-6]
+
+  nll(Q) = begin
+    d = SkewT(Q...)
+    -sum(logpdf.(Ref(d), x))
+  end
+
+  # Sometimes it doens't converge, trying various inits
+  inits = [
+    [mean(x),   std(x) + 1e-6,                       4,  0],
+    [median(x), median(abs.(x .- median(x))) + 1e-6, 10, 0]
+  ]
+
+  for init in inits
+    res = Optim.optimize(nll, lower, upper, init, Optim.Fminbox(Optim.BFGS()); autodiff = :forward)
+    !Optim.converged(res) && continue
+    Q = Optim.minimizer(res)
+    return SkewT(Q...)
+  end
+
+  error("Can't estimate SkewT")
+end

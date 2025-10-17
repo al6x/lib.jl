@@ -1,5 +1,6 @@
 include.(["./skewt.jl", "./Lib.jl"])
 using Test, PyCall, Statistics
+using .Lib
 
 py"""
 import numpy as np
@@ -19,8 +20,6 @@ def skewt_cdf(μ, σ, ν, λ, x):
 def skewt_quantile(μ, σ, ν, λ, p):
   return μ + σ * skewt.ppf(pits=p, parameters=[ν, λ])
 """
-
-skewt_logpdf(0.1, 1.2, 3.0, 0.1, 1.0) ≈ log(py"skewt_pdf"(0.1, 1.2, 3.0, 0.1, 1.0))
 
 @testset "SkewT pdf, cdf, quantile" begin
   νs = [2.1, 3, 5, 10, 30, 100]
@@ -48,6 +47,8 @@ skewt_logpdf(0.1, 1.2, 3.0, 0.1, 1.0) ≈ log(py"skewt_pdf"(0.1, 1.2, 3.0, 0.1, 
   let (νs, λs, qs) = q_test_points()
     @test quantile.(SkewT.(0.1, 1.2, νs, λs), qs) ≈ py"skewt_quantile".(0.1, 1.2, νs, λs, qs)
   end
+
+  @test skewt_logpdf(0.1, 1.2, 3.0, 0.0, 1.5) ≈ tdist_logpdf_std(0.1, 1.2, 3.0, 1.5)
 end;
 
 @testset "SkewT fit_mle" begin
