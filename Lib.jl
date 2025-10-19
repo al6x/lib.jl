@@ -11,7 +11,7 @@ smape(y, ŷ, ϵ = 1e-6) = abs(y - ŷ) / ((abs(y) + abs(ŷ) + ϵ) / 2)
 
 @inline sigmoid(x) = 1.0 / (1.0 + exp(-x))
 
-abs_soft(x; δ=1e-3) = δ^2 * (sqrt(1 + (x/δ)^2) - 1)
+# abs_soft(x; δ=1e-3) = δ^2 * (sqrt(1 + (x/δ)^2) - 1)
 
 ensure_converged(
   r::Union{Optim.UnivariateOptimizationResults, Optim.MultivariateOptimizationResults}
@@ -50,13 +50,13 @@ unzip(rows::Base.Generator) = unzip(collect(rows))
 
 flatten(v::AbstractVector{<:AbstractVector}) = collect(Iterators.flatten(v))
 
-mutable struct LibConfig show_round::Int end
-const config = Ref{Union{LibConfig, Nothing}}(nothing)
+# mutable struct LibConfig show_round::Int end
+# const config = Ref{Union{LibConfig, Nothing}}(nothing)
 
-function configure!(; show_round=4)
-  config[] = LibConfig(show_round)
-end
-configure!()
+# function configure!(; show_round=4)
+#   config[] = LibConfig(show_round)
+# end
+# configure!()
 
 # function Base.show(io::IO, f::Float64)
 #   Printf.@printf(io, "%.*f", config[].show_round, f)
