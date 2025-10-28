@@ -63,7 +63,7 @@ end
   # The 0,4 indices used instead of 1,5 to simplify calculations.
   # w_pow, r_pow = 2.0, 2.0
 
-  @assert 0 < s && 0 < wr <= 1000 && 0 < sr <= 100 && -0.1 < α < 0.1
+  @assert 0 < s && 0 < wr <= 1000 && 0 < sr <= 100 && -0.5 <= α <= 0.5
 
   wm = -log(wr) / 16 # wm = -log(wr) / (4.0^w_pow)
   sm =  log(sr) / 16 # sm =  log(sr) / (4.0^r_pow)
