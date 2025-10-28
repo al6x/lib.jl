@@ -1,0 +1,44 @@
+@inline nmix_le_mean_logpdf_same_locs(le_mean::Real, s::Real, wr::Real, sr::Real, α::Real, x::Real) = begin
+  log2 = 0.6931471805599453
+  @assert 0 < s && 0 < wr <= 1000 && 0 < sr <= 100 && -10.0 <= α <= 10.0
+
+  wm = -log(wr) / 16
+  sm =  log(sr) / 16
+
+  # weights
+  w1, w2, w3, w4, w5 = 1.0, exp(wm), exp(4wm), exp(9wm), exp(16wm)
+  wsum = w1 + w2 + w3 + w4 + w5
+  w1, w2, w3, w4, w5 = w1/wsum, w2/wsum, w3/wsum, w4/wsum, w5/wsum
+
+  # scales
+  s1, s2, s3, s4, s5 = s, exp(sm)*s, exp(4sm)*s, exp(9sm)*s, exp(16sm)*s
+
+  δ = α / sqrt(1 + α^2)
+  κ = sqrt(2/π) * δ
+
+  # log C = log Σ w_k * 2 * exp(0.5 s_k^2) * Φ(δ s_k)
+  b1 = log(w1) + log2 + 0.5*s1*s1 + normlogcdf(δ*s1)
+  b2 = log(w2) + log2 + 0.5*s2*s2 + normlogcdf(δ*s2)
+  b3 = log(w3) + log2 + 0.5*s3*s3 + normlogcdf(δ*s3)
+  b4 = log(w4) + log2 + 0.5*s4*s4 + normlogcdf(δ*s4)
+  b5 = log(w5) + log2 + 0.5*s5*s5 + normlogcdf(δ*s5)
+  logC = logaddexp(logaddexp(logaddexp(b1, b2), logaddexp(b3, b4)), b5)
+
+  ξ = le_mean - logC
+
+  # common location for all components
+  l1 = ξ; l2 = ξ; l3 = ξ; l4 = ξ; l5 = ξ
+
+  # mixture arithmetic mean
+  μ = ξ + κ * (w1*s1 + w2*s2 + w3*s3 + w4*s4 + w5*s5)
+
+  # skew-normal mixture logpdf at x
+  z1 = (x - l1)/s1; a1 = log(w1) + log2 - log(s1) + normlogpdf(z1) + normlogcdf(α*z1)
+  z2 = (x - l2)/s2; a2 = log(w2) + log2 - log(s2) + normlogpdf(z2) + normlogcdf(α*z2)
+  z3 = (x - l3)/s3; a3 = log(w3) + log2 - log(s3) + normlogpdf(z3) + normlogcdf(α*z3)
+  z4 = (x - l4)/s4; a4 = log(w4) + log2 - log(s4) + normlogpdf(z4) + normlogcdf(α*z4)
+  z5 = (x - l5)/s5; a5 = log(w5) + log2 - log(s5) + normlogpdf(z5) + normlogcdf(α*z5)
+
+  logpdf = logaddexp(logaddexp(logaddexp(a1, a2), logaddexp(a3, a4)), a5)
+  logpdf, μ
+end

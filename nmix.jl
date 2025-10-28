@@ -59,11 +59,12 @@ end
 end
 
 @inline nmix_le_mean_logpdf(le_mean::Real, s::Real, wr::Real, sr::Real, α::Real, x::Real) = begin
+  log2 = 0.6931471805599453
   # ratios for weights and scales for 5 components, so that w1/w5 = wr, s5/s1 = sr.
   # The 0,4 indices used instead of 1,5 to simplify calculations.
   # w_pow, r_pow = 2.0, 2.0
 
-  @assert 0 < s && 0 < wr <= 1000 && 0 < sr <= 100 && -0.5 <= α <= 0.5
+  @assert 0 < s && 0 < wr <= 1000 && 0 < sr <= 100 && -10.0 <= α <= 10.0
 
   wm = -log(wr) / 16 # wm = -log(wr) / (4.0^w_pow)
   sm =  log(sr) / 16 # sm =  log(sr) / (4.0^r_pow)
@@ -76,18 +77,19 @@ end
   # scales, s_k = exp.(sm .* i .^ r_pow) .* s
   s1, s2, s3, s4, s5 = s, exp(sm)*s, exp(4sm)*s, exp(9sm)*s, exp(16sm)*s
 
-  # local means (le_mean - 0.5 * s_k^2)
-  l1 = le_mean - 0.5 * s1*s1
-  l2 = le_mean - 0.5 * s2*s2
-  l3 = le_mean - 0.5 * s3*s3
-  l4 = le_mean - 0.5 * s4*s4
-  l5 = le_mean - 0.5 * s5*s5
+  # local means (le_mean - 0.5 * s_k^2 - (log2 + normlogcdf(δ * s_k)))
+  δ = α / sqrt(1 + α^2)
+  l1 = le_mean - 0.5 * s1*s1 - (log2 + normlogcdf(δ * s1))
+  l2 = le_mean - 0.5 * s2*s2 - (log2 + normlogcdf(δ * s2))
+  l3 = le_mean - 0.5 * s3*s3 - (log2 + normlogcdf(δ * s3))
+  l4 = le_mean - 0.5 * s4*s4 - (log2 + normlogcdf(δ * s4))
+  l5 = le_mean - 0.5 * s5*s5 - (log2 + normlogcdf(δ * s5))
 
   # mixture mean
-  μ = w1*l1 + w2*l2 + w3*l3 + w4*l4 + w5*l5
+  κ = sqrt(2/π) * δ
+  μ = w1*(l1 + κ*s1) + w2*(l2 + κ*s2) + w3*(l3 + κ*s3) + w4*(l4 + κ*s4) + w5*(l5 + κ*s5)
 
   # skew-normal mixture logpdf at x
-  log2 = 0.6931471805599453
   z1 = (x - l1)/s1; a1 = log(w1) + log2 - log(s1) + normlogpdf(z1) + normlogcdf(α*z1)
   z2 = (x - l2)/s2; a2 = log(w2) + log2 - log(s2) + normlogpdf(z2) + normlogcdf(α*z2)
   z3 = (x - l3)/s3; a3 = log(w3) + log2 - log(s3) + normlogpdf(z3) + normlogcdf(α*z3)
