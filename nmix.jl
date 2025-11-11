@@ -10,104 +10,28 @@ struct NMix{T<:Real} <: Distributions.ContinuousUnivariateDistribution
   w::NTuple{5, T}; μ::NTuple{5, T}; σ::NTuple{5, T}
 end
 
-@inline nmix_le_mean_logpdf(le_mean::Real, s::Real, wr::Real, sr::Real, x::Real) = begin
-  # ratios for weights and scales for 5 components, so that w1/w5 = wr, s5/s1 = sr.
-  # The 0,4 indices used instead of 1,5 to simplify calculations.
-  # w_pow, r_pow = 2.0, 2.0
-
-  @assert 0 < s && 0 < wr <= 1000 && 0 < sr <= 100
-
-  wm = -log(wr) / 16 # wm = -log(wr) / (4.0^w_pow)
-  sm =  log(sr) / 16 # sm =  log(sr) / (4.0^r_pow)
-
-  # weights, w = exp.(wm .* i .^ w_pow) / wsum
-  w1, w2, w3, w4, w5 = 1.0, exp(wm), exp(4wm), exp(9wm), exp(16wm)
-  wsum = w1 + w2 + w3 + w4 + w5
-  w1, w2, w3, w4, w5 = w1 / wsum, w2 / wsum, w3 / wsum, w4 / wsum, w5 / wsum
-
-  # scales, s_k = exp.(sm .* i .^ r_pow) .* s
-  s1, s2, s3, s4, s5 = s, exp(sm)*s, exp(4sm)*s, exp(9sm)*s, exp(16sm)*s
-
-  # local means (le_mean - 0.5 * s_k^2)
-  l1 = le_mean - 0.5 * s1*s1
-  l2 = le_mean - 0.5 * s2*s2
-  l3 = le_mean - 0.5 * s3*s3
-  l4 = le_mean - 0.5 * s4*s4
-  l5 = le_mean - 0.5 * s5*s5
-
-  # mixture mean
-  μ = w1*l1 + w2*l2 + w3*l3 + w4*l4 + w5*l5
-
-  # skew-normal mixture logpdf at x
-  # log w + log 2 - log σ + log φ(z) + log Φ(α z)
-  # log2 = 0.6931471805599453
-  # z1 = (x - l1)/s1; a1 = log(w1) + log2 - log(s1) + normlogpdf(z1) + normlogcdf(α*z1)
-  # z2 = (x - l2)/s2; a2 = log(w2) + log2 - log(s2) + normlogpdf(z2) + normlogcdf(α*z2)
-  # z3 = (x - l3)/s3; a3 = log(w3) + log2 - log(s3) + normlogpdf(z3) + normlogcdf(α*z3)
-  # z4 = (x - l4)/s4; a4 = log(w4) + log2 - log(s4) + normlogpdf(z4) + normlogcdf(α*z4)
-  # z5 = (x - l5)/s5; a5 = log(w5) + log2 - log(s5) + normlogpdf(z5) + normlogcdf(α*z5)
-
-  z1 = (x - l1)/s1; a1 = log(w1) - log(s1) + normlogpdf(z1)
-  z2 = (x - l2)/s2; a2 = log(w2) - log(s2) + normlogpdf(z2)
-  z3 = (x - l3)/s3; a3 = log(w3) - log(s3) + normlogpdf(z3)
-  z4 = (x - l4)/s4; a4 = log(w4) - log(s4) + normlogpdf(z4)
-  z5 = (x - l5)/s5; a5 = log(w5) - log(s5) + normlogpdf(z5)
-
-  # Pairwise stable summation
-  logpdf = logaddexp(logaddexp(logaddexp(a1, a2), logaddexp(a3, a4)), a5)
-  logpdf, μ
+@inline nmix_logpdf(
+  w::NTuple{N, <:Real}, μ::Union{Real, NTuple{N, <:Real}}, σ::NTuple{N, <:Real}, x::Real
+) where {N} = begin
+  z  = (x .- μ) ./ σ
+  aj = log.(w) .- log.(σ) .+ normlogpdf.(z)
+  m  = maximum(aj)
+  m + log(sum(exp.(aj .- m)))
 end
 
-@inline nmix_le_mean_logpdf(le_mean::Real, s::Real, wr::Real, sr::Real, α::Real, x::Real) = begin
-  log2 = 0.6931471805599453
-  # ratios for weights and scales for 5 components, so that w1/w5 = wr, s5/s1 = sr.
-  # The 0,4 indices used instead of 1,5 to simplify calculations.
-  # w_pow, r_pow = 2.0, 2.0
+@inline logpdf(d::NMix, x::Real) = nmix_logpdf(d.w, d.μ, d.σ, x)
 
-  @assert 0 < s && 0 < wr <= 1000 && 0 < sr <= 100 && -10.0 <= α <= 10.0
-
-  wm = -log(wr) / 16 # wm = -log(wr) / (4.0^w_pow)
-  sm =  log(sr) / 16 # sm =  log(sr) / (4.0^r_pow)
-
-  # weights, w = exp.(wm .* i .^ w_pow) / wsum
-  w1, w2, w3, w4, w5 = 1.0, exp(wm), exp(4wm), exp(9wm), exp(16wm)
-  wsum = w1 + w2 + w3 + w4 + w5
-  w1, w2, w3, w4, w5 = w1 / wsum, w2 / wsum, w3 / wsum, w4 / wsum, w5 / wsum
-
-  # scales, s_k = exp.(sm .* i .^ r_pow) .* s
-  s1, s2, s3, s4, s5 = s, exp(sm)*s, exp(4sm)*s, exp(9sm)*s, exp(16sm)*s
-
-  # local means (le_mean - 0.5 * s_k^2 - (log2 + normlogcdf(δ * s_k)))
-  δ = α / sqrt(1 + α^2)
-  l1 = le_mean - 0.5 * s1*s1 - (log2 + normlogcdf(δ * s1))
-  l2 = le_mean - 0.5 * s2*s2 - (log2 + normlogcdf(δ * s2))
-  l3 = le_mean - 0.5 * s3*s3 - (log2 + normlogcdf(δ * s3))
-  l4 = le_mean - 0.5 * s4*s4 - (log2 + normlogcdf(δ * s4))
-  l5 = le_mean - 0.5 * s5*s5 - (log2 + normlogcdf(δ * s5))
-
-  # mixture mean
-  κ = sqrt(2/π) * δ
-  μ = w1*(l1 + κ*s1) + w2*(l2 + κ*s2) + w3*(l3 + κ*s3) + w4*(l4 + κ*s4) + w5*(l5 + κ*s5)
-
-  # skew-normal mixture logpdf at x
-  z1 = (x - l1)/s1; a1 = log(w1) + log2 - log(s1) + normlogpdf(z1) + normlogcdf(α*z1)
-  z2 = (x - l2)/s2; a2 = log(w2) + log2 - log(s2) + normlogpdf(z2) + normlogcdf(α*z2)
-  z3 = (x - l3)/s3; a3 = log(w3) + log2 - log(s3) + normlogpdf(z3) + normlogcdf(α*z3)
-  z4 = (x - l4)/s4; a4 = log(w4) + log2 - log(s4) + normlogpdf(z4) + normlogcdf(α*z4)
-  z5 = (x - l5)/s5; a5 = log(w5) + log2 - log(s5) + normlogpdf(z5) + normlogcdf(α*z5)
-
-  # Pairwise stable summation
-  logpdf = logaddexp(logaddexp(logaddexp(a1, a2), logaddexp(a3, a4)), a5)
-  logpdf, μ
+@inline nmix_logpdf(
+  w::NTuple{N, <:Real}, μ::Union{Real, NTuple{N, <:Real}}, σ::NTuple{N, <:Real}, α::Real, x::Real
+) where {N} = begin
+  @assert -10.0 <= α <= 10.0 α
+  z  = (x .- μ) ./ σ
+  aj = log.(w) .+ log(2) .- log.(σ) .+ normlogpdf.(z) .+ normlogcdf.(α .* z)
+  m  = maximum(aj)
+  m + log(sum(exp.(aj .- m)))
 end
 
-@inline logpdf(d::NMix, x::Real) = begin
-  s = -Inf; @inbounds for j in 1:5
-    z  = (x - d.μ[j]) / d.σ[j]
-    aj = log(d.w[j]) - log(d.σ[j]) + normlogpdf(z)
-    s  = logaddexp(s, aj)
-  end; s
-end
+@inline logpdf(d::NMix, α::Real, x::Real) = nmix_logpdf(d.w, d.μ, d.σ, α, x)
 
 pdf(d::NMix, x::Real) = exp(logpdf(d, x))
 
@@ -132,35 +56,120 @@ end
 
 mean_exp(d::NMix) = sum(d.w .* exp.(d.μ .+ 0.5 .* d.σ.^2))
 
-# Skewed -------------------------------------------------------------------------------------------
-@inline logpdf(d::NMix, α::Real, x::Real) = begin
-  s = -Inf; @inbounds for j in 1:5
-    z  = (x - d.μ[j]) / d.σ[j]
-    aj = log(d.w[j]) + log(2) - log(d.σ[j]) + normlogpdf(z) + normlogcdf(α*z)
-    s  = logaddexp(s, aj)
-  end; s
-end
-
 mean_exp(d::NMix, α::Real) = begin
-  δ = α / sqrt(1 + α^2)
-  sum(d.w .* exp.(d.μ .+ 0.5 .* d.σ.^2) .* (2 .* normcdf.(δ .* d.σ)))
+  δ = α / sqrt(1 + α*α)
+  sum(d.w .* exp.(d.μ .+ 0.5 .* d.σ.*d.σ) .* (2 .* normcdf.(δ .* d.σ)))
 end
 
+@inline nmix_le_mean_logpdf(
+  le_mean::Real, ws::NTuple{N, <:Real}, σ::NTuple{N, <:Real}, x::Real
+) where {N} = begin
+  μ = le_mean .- 0.5 .* σ .* σ # means corresponding to le_mean.
+  μ_mix = sum(ws .* μ)         # mixture mean
 
-# @inline nmix_logpdf(w::NTuple{5, T}, μ::NTuple{5, T}, σ::NTuple{5, T}, x::Real) where {T<:Real} = begin
-#   s = -Inf; @inbounds for j in 1:length(w)
-#     z  = (x - μ[j]) / σ[j]
-#     aj = log(w[j]) - log(σ[j]) + normlogpdf(z)
-#     s  = logaddexp(s, aj)
-#   end; s
-# end
+  nmix_logpdf(ws, μ, σ, x), μ_mix
+end
 
-# @inline nmix_logpdf(w::NTuple{5,Real}, μ::NTuple{5,Real}, σ::NTuple{5,Real}, α::Real, x::Real) = begin
-#   s = -Inf
-#   @inbounds for j in 1:5
-#     z  = (x - μ[j]) / σ[j]
-#     aj = log(w[j]) + log(2) - log(σ[j]) + normlogpdf(z) + normlogcdf(α*z)
-#     s  = logaddexp(s, aj)
-#   end
-#   s
-# end
+@inline nmix_le_mean_logpdf(
+  le_mean::Real, ws::NTuple{N, <:Real}, σ::NTuple{N, <:Real}, α::Real, x::Real
+) where {N} = begin
+  @assert -10.0 <= α <= 10.0 α
+
+  # means corresponding to le_mean.
+  δ = α / sqrt(1 + α*α)
+  μ = le_mean .- 0.5 .* σ .* σ .- (log(2) .+ normlogcdf.(δ .* σ))
+
+  # mixture mean
+  κ = sqrt(2/π) * δ
+  μ_mix = sum(ws .* (μ .+ κ .* σ))
+
+  nmix_logpdf(ws, μ, σ, α, x), μ_mix
+end
+
+# tmix ---------------------------------------------------------------------------------------------
+@inline tmix_ws_ss(ν::Real) = begin
+  # See fit_tmix.jl for fitting
+  @assert 2.5 <= ν <= 15.0 ν
+
+  a = -1.72159 + 3.223223*ν - 0.103005*ν*ν
+
+  ws = exp.(
+    (-51.060801, -54.117216, -59.211241, -66.342876, -75.512121) ./ a .+
+    (  1.592159,   2.482642,   2.671449,   2.15858,    0.944035)
+  )
+  ws = ws ./ sum(ws)
+
+  ss = exp.((-6.455494, -3.495181, 0.586545, 5.789699, 12.114266) ./ a)
+
+  ws, ss
+end
+
+@inline tmix_logpdf(loc::Real, s::Real, ν::Real, x::Real) = begin
+  @assert 0 < s s
+  ws, ss = tmix_ws_ss(ν)
+  nmix_logpdf(ws, loc, ss .* s, x)
+end
+
+@inline tmix_logpdf(loc::Real, s::Real, ν::Real, α::Real, x::Real) = begin
+  @assert 0 < s s
+  ws, ss = tmix_ws_ss(ν)
+  nmix_logpdf(ws, loc, ss .* s, α, x)
+end
+
+@inline tmix_le_mean_logpdf(le_mean::Real, s::Real, ν::Real, x::Real) = begin
+  @assert 0 < s s
+  ws, ss = tmix_ws_ss(ν)
+  nmix_le_mean_logpdf(le_mean, ws, ss .* s, x)
+end
+
+@inline tmix_le_mean_logpdf(le_mean::Real, s::Real, ν::Real, α::Real, x::Real) = begin
+  @assert 0 < s s
+  ws, ss = tmix_ws_ss(ν)
+  nmix_le_mean_logpdf(le_mean, ws, ss .* s, α, x)
+end
+
+# nigmix -------------------------------------------------------------------------------------------
+@inline nigmix_ws_ss(α::Real) = begin
+  # See fit_nigmix.jl for fitting
+  @assert 0.7 <= α <= 10.0 α
+
+  lα = log(α)
+  a = exp(0.331822 + 0.208549*lα + 0.012952*lα*lα)
+
+  ws = exp.(
+    (17.489715, 16.744012,  14.622189, 11.124246,  6.250183) .-
+    (16.81154,  13.449232,  10.086924,  6.724616,  3.362308) ./ a
+  )
+  ws = ws ./ sum(ws)
+
+  ss = exp.(
+    (-3.26369264, -3.011738, -2.7257566, -2.3865299, -1.944441) .+
+    (5.55397,      4.443176, 3.332382,    2.221588,   1.110794) ./a
+  )
+
+  ws, ss
+end
+
+@inline nigmix_logpdf(loc::Real, scale::Real, α::Real, x::Real) = begin
+  @assert 0 < scale scale
+  ws, ss = nigmix_ws_ss(α)
+  nmix_logpdf(ws, loc, ss .* scale, x)
+end
+
+@inline nigmix_logpdf(loc::Real, s::Real, α::Real, α2::Real, x::Real) = begin
+  @assert 0 < s s
+  ws, ss = nigmix_ws_ss(α)
+  nmix_logpdf(ws, loc, ss .* s, α2, x)
+end
+
+@inline nigmix_le_mean_logpdf(le_mean::Real, s::Real, α::Real, x::Real) = begin
+  @assert 0 < s s
+  ws, ss = nigmix_ws_ss(α)
+  nmix_le_mean_logpdf(le_mean, ws, ss .* s, x)
+end
+
+@inline nigmix_le_mean_logpdf(le_mean::Real, s::Real, α::Real, α2::Real, x::Real) = begin
+  @assert 0 < s s
+  ws, ss = nigmix_ws_ss(α)
+  nmix_le_mean_logpdf(le_mean, ws, ss .* s, α2, x)
+end

@@ -112,4 +112,7 @@ ewa(x::AbstractVector{<:Union{Missing,Real}}, α::Real; fill_missing=false) = be
   y
 end
 
+export skipnan
+skipnan(x::AbstractArray) = Iterators.filter(!isnan, x)
+
 end
