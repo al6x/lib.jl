@@ -13,18 +13,12 @@ end;
   @test QuadGK.quadgk(f, log(1e-4), log(1e+4))[1] ≈ exp(0.1)
 end;
 
-# @testset "tmix_logpdf should match SkewT" begin
+@testset "tmix_logpdf should match SkewT" begin
   d = SkewT(0.0, 1.0, 3.0, 0.0);
-  exp(logpdf(d, 0.5))
-  exp(tmix_logpdf(0.0, 1.0, 5.0, 0.5))
-  # @test QuadGK.quadgk(f, log(1e-4), log(1e+4))[1] ≈ exp(0.1)
-# end;
+  @assert isapprox(exp(tmix_logpdf(0.0, 1.0, 3.0, 0.5)), pdf(d, 0.5), rtol=0.03)
+end;
 
-d = SkewT(0.0, 1.0, 3.0, 0.0);
-xs = collect(range(-5.0, 5.0; length=1000));
-
-ν = 5.0
-plot(xs, pdf.(Ref(SkewT(0.0, 1.0, ν, 0.0)), xs) ./ exp.(tmix_logpdf.(0.0, 1.0, ν, xs)), label="SkewT", )
-
-plot(xs, pdf.(Ref(d), xs), label="SkewT", )
-plot!(xs, exp.(tmix_logpdf.(0.0, 1.0, 3.0, xs)), label="TMix", linestyle=:dash)
+@testset "nigmix_logpdf should match NIG" begin
+  nig_pdf = 0.38633 # py"nig_pdf"(0.0, 1.0, 8.0, 0.0, 0.5)
+  @assert isapprox(exp(nigmix_logpdf(0.0, 1.0, 8.0, 0.5)), nig_pdf, rtol=0.03)
+end;

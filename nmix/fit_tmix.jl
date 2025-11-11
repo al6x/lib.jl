@@ -103,7 +103,12 @@ end;
   lν = log(ν)
   v = exp(Q[7] + Q[8]*lν + Q[9]*lν*lν)
 
-  ci = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0).^0.5
+  # ci = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0).^0.5 # loss=1.0049
+  # ci = (1.0, 2.0, 3.0, 4.0, 3.5, 5.43).^0.5 # loss=1.001609
+  ci = (
+    (Q[10] .+ Q[11].*(1.0, 2.0, 3.0, 4.0))...,
+    (Q[12], Q[13])...,
+  ) # loss=1.0015
 
   ws = exp.(Q[1] .+ (Q[2] .+ Q[3].*ci).*v)
   ws = ws./sum(ws)
@@ -155,10 +160,15 @@ end;
 
 Q = let
   results = []
-  for i in 1:10
+  for i in 1:20
     println(i)
     try
-      Q, loss = fit(tmix_logpdf, randn(9));
+      Q0 = randn(13)
+      Q0[10] = 0.7 + 0.1randn(); Q0[11] = 0.3 + 0.1randn()
+      Q0[12] = 3.5 + 0.5randn(); Q0[13] = 5.43 + 0.5randn()
+
+      Q, loss = fit(tmix_logpdf, Q0);
+      # Q, loss = fit(tmix_logpdf, randn(9));
       push!(results, (Q, loss))
     catch e
       println("failed")
@@ -194,12 +204,6 @@ plot_fit(model, type="error") = begin
     plot!(p2, df.p, df.y2)
 
     plot(p1, p2, layout=(2,1), plot_title="ν=3")
-  # else if type == "pdf_all"
-  #   plot_xyc_by(
-  #     "NMix TDist", ν_ds; x=(:x, :symlog), y=:y, y2=:yt, by=:ν, mark=:line, mark2=:circle);
-  # else if type == "pdf_all_log"
-  #   plot_xyc_by(
-  #     "NMix TDist", ν_ds; x=(:x, :symlog), y=(:y, :log), y2=:yt, by=:ν, mark=:line);
   else
     df |> @vlplot(
       :line,
@@ -216,23 +220,22 @@ plot_fit(fit_tmix_logpdf, "error")
 plot_fit(fit_tmix_logpdf, "pdf")
 
 # Final --------------------------------------------------------------------------------------------
-# Q=[
-#   -0.841897, 2.068127, 5.684115,
-#   -0.064283, 6.671617, -3.308996,
-#   0.949395, -1.921074, 0.306935
-# ], loss=1.004906753112641
-
 @inline tmix_ws_ss(ν::Real) = begin
   # See fit_tmix.jl for fitting
+  # Q=[
+  #   -0.523857, -0.349351, -2.164389, -0.074823, 3.886313, 1.234103,
+  #   -0.608911, -1.804228, 0.278592, 7.081085, -3.867854, -2.255962, 9.032569
+  # ], loss=1.00156
+
   @assert 2.5 <= ν <= 15.0 ν
 
   lν = log(ν)
-  v = exp(0.949395 - 1.921074*lν + 0.306935*lν*lν)
+  v = exp(-0.608911 - 1.804228*lν + 0.278592*lν*lν)
 
-  ws = exp.(-0.841897 .+ (7.752242, 10.10668, 11.913304, 13.436358, 14.778196, 15.991309) .* v)
+  ws = exp.(-0.523857 .+ (-7.304031, 1.067509, 9.439049, 17.810589, 4.533427, -19.899341) .* v)
   ws = ws ./ sum(ws)
 
-  ss = exp.(-0.064283 .+ (3.362621,  1.99199,  0.940268,  0.053625, -0.727523, -1.433735) .* v)
+  ss = exp.(-0.074823 .+ ( 7.851771, 3.07844, -1.694891, -6.468222, 1.102224,  15.033435) .* v)
 
   ws, ss
 end
