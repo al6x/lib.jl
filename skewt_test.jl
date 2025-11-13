@@ -66,3 +66,9 @@ end
     @test [μ, σ, ν, λ] ≈ [1.0, 2.0, 5.0, 0.5] rtol=0.1
   end
 end
+
+@testset "SkewT mean_exp" begin
+  # E[e^x] should be larger than normal
+  d = SkewT(0.0, 0.15, 3.0, 0.0)
+  @test mean_exp(d; l=quantile(d, 1e-6), h=quantile(d, 1-1e-6)) > exp(0.5*0.15^2)
+end

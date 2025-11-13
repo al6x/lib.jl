@@ -1,10 +1,10 @@
 includet("../skewt.jl")
-using DataFrames, Random, Statistics, StatsBase, Optim, Distributions
+using DataFrames, Random, Statistics, StatsBase, Optim, Distributions, Plots
 
 Random.seed!(0)
 
 σ_range = (0.002,  0.3);
-ν_range = (2.7,    8.0);
+ν_range = (2.5,    8.0);
 λ_range = (-0.1,   0.05);
 hp_range = 0.9999;
 
@@ -23,21 +23,21 @@ ds = let
 
   ds.emean = [mean_exp(d; l=log(1e-6), h=ds.h[i]) for (i, d) in enumerate(ds.d)];
   ds
-end
+end;
 
-skewt_mean_exp_adj(σ, ν, λ, hp, Q) = begin
+skewt_mean_exp_adj(Q, σ, ν, λ, hp) = begin
   @assert σ_range[1] <= σ <= σ_range[2] "σ out of range"
   @assert ν_range[1] <= ν <= ν_range[2] "ν out of range"
   @assert λ_range[1] <= λ <= λ_range[2] "λ out of range"
   @assert hp == hp_range "hp out of range"
 
-  lν = log(ν-2.5)
+  lν = log(ν-2.4)
   m1 = exp(Q[1] + Q[2]lν + Q[3]λ + Q[4]lν^2 + Q[5]λ^2 + Q[6]*lν*λ)
   m2 = Q[7] + Q[8]lν + Q[9]λ
   Q[10] + m1*σ^2 + m2*σ
 end;
 
-skewt_mean_exp_adj_simple(σ, ν, λ, hp, Q) = begin
+skewt_mean_exp_adj_simple(Q, σ, ν, λ, hp) = begin
   @assert σ_range[1] <= σ <= σ_range[2] "σ out of range"
   @assert ν_range[1] <= ν <= ν_range[2] "ν out of range"
   @assert λ_range[1] <= λ <= λ_range[2] "λ out of range"
@@ -49,7 +49,7 @@ end;
 
 fit_skewt_mean_exp_adj(ds, N, model) = begin
   residuals(Q) = log.(ds.emean) .- (
-    ds.μ + model.(ds.σ, ds.ν, ds.λ, ds.hp, Ref(Q))
+    ds.μ + model.(Ref(Q), ds.σ, ds.ν, ds.λ, ds.hp)
   )
   goal(Q)      = 100000*mean(residuals(Q).^2)
   penalty(Q)   = (1/1000000)mean(Q[2:end].^2)
@@ -75,14 +75,41 @@ end;
 
 Q, re = fit_skewt_mean_exp_adj(ds, 10, skewt_mean_exp_adj)
 
-
 # [
-#   -0.648218866392912, -0.012407729414709195, 0.8718567522522687, -0.006870895633471439,
-#   0.0054997790794226705, -0.25093014015464354, -0.00707318980863869, 0.0032400538810423035,
-#   -0.03602921073340562, -5.373827757175762e-5
-# ], 1.0014
-
+#   -0.6446035285361307, -0.00973506852001564, 0.948060065080043, -0.009137070041612714,
+#   0.008049584856130821, -0.27304426222650746, -0.007834351347080036, 0.003499118160540425,
+#   -0.04135562494536131, -4.2401628337359495e-5
+# ], 1.0016
 
 Q, re = fit_skewt_mean_exp_adj(ds, 3, skewt_mean_exp_adj_simple)
 
-# [0.4741825626694302, 0.0038481375624699853, 0.23232365015451695], 1.0027
+# [0.8741839146540278, 0.07021915718742801, 0.5156547228197067], 1.0042
+
+# Final --------------------------------------------------------------------------------------------
+@inline skewt_mean_exp_adj(σ::Real, ν::Real, λ::Real) = begin
+  # Truncated at 0.9999 quantile
+  # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
+  @assert 2.5 <= ν <= 8.0 "ν out of range: $ν"
+  @assert -0.1 <= λ <= 0.05 "λ out of range: $λ"
+
+  lν = log(ν-2.4)
+  m1 = exp(
+    -0.6446035285361307 -0.00973506852001564*lν +0.948060065080043*λ
+    -0.009137070041612714*lν*lν +0.008049584856130821*λ*λ +
+    -0.27304426222650746*lν*λ
+  )
+  m2 = -0.007834351347080036 +0.003499118160540425*lν -0.04135562494536131*λ
+  -4.2401628337359495e-5 + m1*σ*σ + m2*σ
+end;
+@assert skewt_mean_exp_adj(0.15, 3.0, -0.1) ≈ skewt_mean_exp_adj(Q, 0.15, 3.0, -0.1, 0.9999)
+
+skewt_mean_exp_adj_simple(σ::Real, ν::Real, λ::Real) = begin
+  # Truncated at 0.9999 quantile
+  # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
+  @assert 2.5 <= ν <= 8.0 "ν out of range"
+  @assert -0.1 <= λ <= 0.05 "λ out of range"
+
+  (0.8741839146540278 + 0.07021915718742801*log(ν) + 0.5156547228197067*λ)*σ*σ/2
+end;
+@assert skewt_mean_exp_adj_simple(0.15, 3.0, -0.1) ≈
+  skewt_mean_exp_adj_simple(Q, 0.15, 3.0, -0.1, 0.9999)

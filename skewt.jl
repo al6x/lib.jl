@@ -142,39 +142,38 @@ fit_mle(::Type{SkewT}, x::AbstractVector{<:Real}, fix::Union{Nothing,NamedTuple}
   fix === nothing ? fit_mle_free(SkewT, x) : fit_mle_fixed(SkewT, x; fix)
 end
 
-mean_exp(d::SkewT; l::T, h::T) where {T<:Real} = begin
+mean_exp(d::SkewT; l::Real, h::Real) = begin
   f(x) = pdf(d, x) * exp(x)
   QuadGK.quadgk(f, l, h)[1]
 end
 
 # Fast approx for `adj = log E[e^x] - μ`, with truncated upper tail at 0.9999 quantile.
 # Details skewt/fit_skewt_mean_exp.jl
-@inline skewt_mean_exp_adj(σ::T, ν::T, λ::T) where {T<:Real} = begin
+@inline skewt_mean_exp_adj(σ::Real, ν::Real, λ::Real) = begin
   # Truncated at 0.9999 quantile
   # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
-  @assert 2.7 <= ν <= 8.0 "ν out of range"
-  @assert -0.1 <= λ <= 0.05 "λ out of range"
+  @assert 2.5 <= ν <= 8.0 "ν out of range: $ν"
+  @assert -0.1 <= λ <= 0.05 "λ out of range: $λ"
 
-  lν = log(ν - 2.5)
+  lν = log(ν-2.4)
   m1 = exp(
-    -0.648218866392912 -0.012407729414709195*lν + 0.8718567522522687*λ
-    -0.006870895633471439*lν^2 + 0.0054997790794226705*λ^2 +
-    -0.25093014015464354*lν*λ
+    -0.6446035285361307 -0.00973506852001564*lν +0.948060065080043*λ
+    -0.009137070041612714*lν*lν +0.008049584856130821*λ*λ +
+    -0.27304426222650746*lν*λ
   )
-  m2 = -0.00707318980863869 + 0.0032400538810423035*lν -0.03602921073340562*λ
-
-  -5.373827757175762e-5 + m1*σ^2 + m2*σ
+  m2 = -0.007834351347080036 +0.003499118160540425*lν -0.04135562494536131*λ
+  -4.2401628337359495e-5 + m1*σ*σ + m2*σ
 end;
 
 # Very simple approx for `adj = log E[e^x] - μ`, with truncated upper tail at 0.9999 quantile.
 # Details skewt/fit_skewt_mean_exp.jl
-skewt_mean_exp_adj_simple(σ::T, ν::T, λ::T) where {T<:Real} = begin
+skewt_mean_exp_adj_simple(σ::Real, ν::Real, λ::Real) = begin
   # Truncated at 0.9999 quantile
   # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
-  # @assert 2.7 <= ν <= 8.0 "ν out of range"
-  # @assert -0.1 <= λ <= 0.05 "λ out of range"
+  @assert 2.5 <= ν <= 8.0 "ν out of range"
+  @assert -0.1 <= λ <= 0.05 "λ out of range"
 
-  (0.9483651253382737 + 0.007696275121991037*ν + 0.4646473003090392*λ)*σ^2/2
+  (0.8741839146540278 + 0.07021915718742801*log(ν) + 0.5156547228197067*λ)*σ*σ/2
 end;
 
 

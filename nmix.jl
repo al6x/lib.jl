@@ -4,7 +4,7 @@ import Random: rand
 import Statistics: mean, std
 import QuadGK, Interpolations
 import Roots
-using StatsFuns: normlogpdf, normlogcdf, logaddexp
+using StatsFuns: normcdf, normlogpdf, normlogcdf, logaddexp
 
 struct NMix{T<:Real} <: Distributions.ContinuousUnivariateDistribution
   w::NTuple{5, T}; μ::NTuple{5, T}; σ::NTuple{5, T}
@@ -62,26 +62,35 @@ mean_exp(d::NMix, α::Real) = begin
 end
 
 @inline nmix_le_mean_logpdf(
-  le_mean::Real, ws::NTuple{N, <:Real}, σ::NTuple{N, <:Real}, x::Real
+  le_mean::Real, ws::NTuple{N, <:Real}, σ::NTuple{N, <:Real}, x::Real; same_loc=true
 ) where {N} = begin
-  μ = le_mean .- 0.5 .* σ .* σ # means corresponding to le_mean.
-  μ_mix = sum(ws .* μ)         # mixture mean
-
+  # μ - means corresponding to le_mean, μ_mix - mixture mean E[x]
+  if same_loc
+    μ = le_mean - log(sum(ws .* exp.(0.5 .* σ .* σ)))
+    μ_mix = μ
+  else
+    μ = le_mean .- 0.5 .* σ .* σ
+    μ_mix = sum(ws .* μ)
+  end
   nmix_logpdf(ws, μ, σ, x), μ_mix
 end
 
 @inline nmix_le_mean_logpdf(
-  le_mean::Real, ws::NTuple{N, <:Real}, σ::NTuple{N, <:Real}, α::Real, x::Real
+  le_mean::Real, ws::NTuple{N, <:Real}, σ::NTuple{N, <:Real}, α::Real, x::Real; same_loc=true
 ) where {N} = begin
   @assert -10.0 <= α <= 10.0 α
 
-  # means corresponding to le_mean.
+  # μ - means corresponding to le_mean, μ_mix - mixture mean E[x]
   δ = α / sqrt(1 + α*α)
-  μ = le_mean .- 0.5 .* σ .* σ .- (log(2) .+ normlogcdf.(δ .* σ))
-
-  # mixture mean
   κ = sqrt(2/π) * δ
-  μ_mix = sum(ws .* (μ .+ κ .* σ))
+  if same_loc
+    s = sum(ws .* exp.(0.5 .* σ .* σ) .* (2 .* normcdf.(δ .* σ)))
+    μ = le_mean - log(s)
+    μ_mix = μ + κ * sum(ws .* σ)
+  else
+    μ = le_mean .- 0.5 .* σ .* σ .- (log(2) .+ normlogcdf.(δ .* σ))
+    μ_mix = sum(ws .* (μ .+ κ .* σ))
+  end
 
   nmix_logpdf(ws, μ, σ, α, x), μ_mix
 end
@@ -119,16 +128,16 @@ end
   nmix_logpdf(ws, loc, ss .* s, α, x)
 end
 
-@inline tmix_le_mean_logpdf(le_mean::Real, s::Real, ν::Real, x::Real) = begin
+@inline tmix_le_mean_logpdf(le_mean::Real, s::Real, ν::Real, x::Real; same_loc=true) = begin
   @assert 0 < s s
   ws, ss = tmix_ws_ss(ν)
-  nmix_le_mean_logpdf(le_mean, ws, ss .* s, x)
+  nmix_le_mean_logpdf(le_mean, ws, ss .* s, x; same_loc)
 end
 
-@inline tmix_le_mean_logpdf(le_mean::Real, s::Real, ν::Real, α::Real, x::Real) = begin
+@inline tmix_le_mean_logpdf(le_mean::Real, s::Real, ν::Real, α::Real, x::Real; same_loc=true) = begin
   @assert 0 < s s
   ws, ss = tmix_ws_ss(ν)
-  nmix_le_mean_logpdf(le_mean, ws, ss .* s, α, x)
+  nmix_le_mean_logpdf(le_mean, ws, ss .* s, α, x; same_loc)
 end
 
 # nigmix -------------------------------------------------------------------------------------------
@@ -164,14 +173,16 @@ end
   nmix_logpdf(ws, loc, ss .* s, α2, x)
 end
 
-@inline nigmix_le_mean_logpdf(le_mean::Real, s::Real, α::Real, x::Real) = begin
+@inline nigmix_le_mean_logpdf(le_mean::Real, s::Real, α::Real, x::Real; same_loc=true) = begin
   @assert 0 < s s
   ws, ss = nigmix_ws_ss(α)
-  nmix_le_mean_logpdf(le_mean, ws, ss .* s, x)
+  nmix_le_mean_logpdf(le_mean, ws, ss .* s, x; same_loc)
 end
 
-@inline nigmix_le_mean_logpdf(le_mean::Real, s::Real, α::Real, α2::Real, x::Real) = begin
+@inline nigmix_le_mean_logpdf(
+  le_mean::Real, s::Real, α::Real, α2::Real, x::Real; same_loc=true
+) = begin
   @assert 0 < s s
   ws, ss = nigmix_ws_ss(α)
-  nmix_le_mean_logpdf(le_mean, ws, ss .* s, α2, x)
+  nmix_le_mean_logpdf(le_mean, ws, ss .* s, α2, x; same_loc)
 end
