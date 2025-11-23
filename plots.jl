@@ -86,3 +86,5 @@ plot_xyc_by(
   display(fig)
   ftitle, fig
 end
+
+plot_xyc_by(ds; args...) = plot_xyc_by("", ds; args...)

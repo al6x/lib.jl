@@ -153,28 +153,28 @@ end
   # Truncated at 0.9999 quantile
   # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
   @assert 2.5 <= ν <= 8.0 "ν out of range: $ν"
-  @assert -0.1 <= λ <= 0.05 "λ out of range: $λ"
+  @assert -0.15 <= λ <= 0.05 "λ out of range: $λ"
 
   lν = log(ν-2.4)
   m1 = exp(
-    -0.6446035285361307 -0.00973506852001564*lν +0.948060065080043*λ
-    -0.009137070041612714*lν*lν +0.008049584856130821*λ*λ +
-    -0.27304426222650746*lν*λ
+    -0.64712633612679 -0.005752067901847157*lν +0.932187400251973*λ
+    -0.009536104489873834*lν*lν +0.046569817307045354*λ*λ
+    -0.2692989479094323*lν*λ
   )
-  m2 = -0.007834351347080036 +0.003499118160540425*lν -0.04135562494536131*λ
-  -4.2401628337359495e-5 + m1*σ*σ + m2*σ
+  m2 = -0.007362048899582084 + 0.002963257547045823*lν -0.03907412333647714*λ
+  -5.629278523732494e-5 + m1*σ*σ + m2*σ
 end;
 
-# Very simple approx for `adj = log E[e^x] - μ`, with truncated upper tail at 0.9999 quantile.
-# Details skewt/fit_skewt_mean_exp.jl
-skewt_mean_exp_adj_simple(σ::Real, ν::Real, λ::Real) = begin
-  # Truncated at 0.9999 quantile
-  # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
-  @assert 2.5 <= ν <= 8.0 "ν out of range"
-  @assert -0.1 <= λ <= 0.05 "λ out of range"
+# # Very simple approx for `adj = log E[e^x] - μ`, with truncated upper tail at 0.9999 quantile.
+# # Details skewt/fit_skewt_mean_exp.jl
+# skewt_mean_exp_adj_simple(σ::Real, ν::Real, λ::Real) = begin
+#   # Truncated at 0.9999 quantile
+#   # @assert 0.002 <= σ <= 0.3 "σ out of range" # ignored, it may go out during fitting
+#   @assert 2.5 <= ν <= 8.0 "ν out of range"
+#   @assert -0.1 <= λ <= 0.05 "λ out of range"
 
-  (0.8741839146540278 + 0.07021915718742801*log(ν) + 0.5156547228197067*λ)*σ*σ/2
-end;
+#   (0.8741839146540278 + 0.07021915718742801*log(ν) + 0.5156547228197067*λ)*σ*σ/2
+# end;
 
 
 # Keeping just as a comparison, bounded version is twice slower as reparametrised

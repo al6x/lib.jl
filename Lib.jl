@@ -81,7 +81,8 @@ end
   tdist_logpdf(ν, (x-μ)/scale) - log(scale)
 end
 
-Base.round(x::NamedTuple; opts...) = (; (k => round(v; opts...) for (k,v) in pairs(x))...)
+Base.round(x::NamedTuple; opts...) =
+  (; (k => v isa AbstractFloat ? round(v; opts...) : v for (k,v) in pairs(x))...)
 
 Random.seed!(op::Function, seed::Integer) = begin
   state = copy(Random.default_rng())
@@ -91,6 +92,34 @@ Random.seed!(op::Function, seed::Integer) = begin
   finally
     copy!(Random.default_rng(), state)
   end
+end
+
+export skipnan
+skipnan(x::AbstractArray) = Iterators.filter(!isnan, x)
+
+export say
+say(msg::String) = run(`say $msg`)
+
+export mscore
+mscore(x::Vector{Union{Missing,<:Real}}; c=nothing) = begin
+  present = skipmissing(x)
+  c === nothing && (c = median(present))
+  s = median(abs.(present .- c))
+  (x .- c) ./ s
+end
+
+
+# Finance ------------------------------------------------------------------------------------------
+calc_diff(op, x::Vector{Union{Missing,Float64}}) = begin
+  y, prev = Vector{Union{Missing,Float64}}(undef, length(x)), missing
+  for i in 1:length(x)
+    y[i] = if ismissing(x[i]) missing else
+      v = ismissing(prev) ? missing : op(prev, x[i])
+      prev = x[i]
+      v
+    end
+  end
+  y
 end
 
 ewa(x::AbstractVector{<:Union{Missing,Real}}, α::Real; fill_missing=false) = begin
@@ -112,7 +141,45 @@ ewa(x::AbstractVector{<:Union{Missing,Real}}, α::Real; fill_missing=false) = be
   y
 end
 
-export skipnan
-skipnan(x::AbstractArray) = Iterators.filter(!isnan, x)
+roll_slow(op, vs::Vector{Union{Missing, Float64}}; window, min) = begin
+  r = Vector{Union{Missing, Float64}}(missing, length(vs))
+  for t in 1:length(vs)
+    vs[t] === missing && continue
+    present = skipmissing(vs[max((t - window + 1), 1):t])
+    count(_ -> true, present) ≥ min || continue
+    r[t] = op(present)
+  end
+  r
+end
+
+calc_r2(rs::Vector; period::Int) = begin
+  @assert period > 0
+  n = length(rs)
+  [begin
+    t2 = t + period
+    if ismissing(rs[t]) || t2 > n
+      missing
+    else
+      sum = 0.0; for i in t+1:t2-1
+        r = rs[i]; !ismissing(r) && (sum += r)
+      end
+
+      rlast = rs[t2]
+      # If last return at t2 is non trading day using next trading day,
+      # but no more than 2 days ahead
+      if ismissing(rlast)
+        tlast = t2
+        while ismissing(rlast) && tlast < min(n, t + period + 2)
+          tlast += 1; rlast = rs[tlast]
+        end
+      end
+      ismissing(rlast) ? missing : sum + rlast
+    end
+  end for t in 1:n]
+end
+
+export nan_to_missing, missing_to_nan
+nan_to_missing(x::AbstractArray{Float64}) = map(v -> isnan(v) ? missing : v, x)
+missing_to_nan(x::AbstractArray{Union{Missing,Float64}}) = map(v -> ismissing(v) ? NaN : v, x)
 
 end
