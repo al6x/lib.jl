@@ -110,7 +110,7 @@ end
 
 
 # Finance ------------------------------------------------------------------------------------------
-calc_diff(op, x::Vector{Union{Missing,Float64}}) = begin
+calc_diff(op, x::Vector{<:Union{Missing,Float64}}) = begin
   y, prev = Vector{Union{Missing,Float64}}(undef, length(x)), missing
   for i in 1:length(x)
     y[i] = if ismissing(x[i]) missing else
@@ -152,34 +152,49 @@ roll_slow(op, vs::Vector{Union{Missing, Float64}}; window, min) = begin
   r
 end
 
-calc_r2(rs::Vector; period::Int) = begin
+rperiod(rs::Vector; period::Int, overlap=false) = begin
   @assert period > 0
   n = length(rs)
-  [begin
-    t2 = t + period
+  rsp::Vector{Union{Missing,Float64}} = [begin
+    t2 = t + period - 1
     if ismissing(rs[t]) || t2 > n
       missing
     else
-      sum = 0.0; for i in t+1:t2-1
-        r = rs[i]; !ismissing(r) && (sum += r)
+      count, sum = 0, 0.0; for i in t:t2-1
+        r = rs[i]; !ismissing(r) && (sum += r; count += 1)
       end
 
       rlast = rs[t2]
       # If last return at t2 is non trading day using next trading day,
-      # but no more than 2 days ahead
+      # but with the gap no more than 2 days.
+      max_last_gap = 2
       if ismissing(rlast)
         tlast = t2
-        while ismissing(rlast) && tlast < min(n, t + period + 2)
+        while ismissing(rlast) && tlast < min(n, t2 + max_last_gap)
           tlast += 1; rlast = rs[tlast]
         end
       end
-      ismissing(rlast) ? missing : sum + rlast
+      # Return missing if insufficient data or last return is missing
+      ismissing(rlast) || (count + 1 < period/2) ? missing : sum + rlast
     end
   end for t in 1:n]
+
+  if overlap == false
+    i = 1; while i <= n
+      if ismissing(rsp[i]) i += 1 else
+        rsp[i+1:min(i+period-1, n)] .= missing
+        i += period
+      end
+    end
+  end
+
+  rsp
 end
 
 export nan_to_missing, missing_to_nan
 nan_to_missing(x::AbstractArray{Float64}) = map(v -> isnan(v) ? missing : v, x)
 missing_to_nan(x::AbstractArray{Union{Missing,Float64}}) = map(v -> ismissing(v) ? NaN : v, x)
+
+never(msg="Never") = throw(ErrorException(msg))
 
 end
