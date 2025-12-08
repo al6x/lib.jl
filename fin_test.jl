@@ -1,4 +1,4 @@
-include.(["./Lib.jl"])
+include.(["./Lib.jl", "./fin.jl"])
 using Test, .Lib
 
 @testset "rperiod all present" begin

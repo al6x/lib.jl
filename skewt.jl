@@ -9,7 +9,6 @@ struct SkewT{T<:Real} <: Distributions.ContinuousUnivariateDistribution
   a::T; b::T; c::T
 end
 
-
 function SkewT(μ::T, σ::T, ν::T, λ::T) where {T<:Real}
   σ > 0       || throw(DomainError(σ, "σ must be > 0"))
   ν > 2.05    || throw(DomainError(ν, "ν must be > 2.05"))

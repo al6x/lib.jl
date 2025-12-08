@@ -101,94 +101,11 @@ export say
 say(msg::String) = run(`say $msg`)
 
 export mscore
-mscore(x::Vector{Union{Missing,<:Real}}; c=nothing) = begin
+mscore(x::Vector{Union{Missing,T}}; c=nothing) where {T<:Real} = begin
   present = skipmissing(x)
   c === nothing && (c = median(present))
   s = median(abs.(present .- c))
   (x .- c) ./ s
-end
-
-
-# Finance ------------------------------------------------------------------------------------------
-calc_diff(op, x::Vector{<:Union{Missing,Float64}}) = begin
-  y, prev = Vector{Union{Missing,Float64}}(undef, length(x)), missing
-  for i in 1:length(x)
-    y[i] = if ismissing(x[i]) missing else
-      v = ismissing(prev) ? missing : op(prev, x[i])
-      prev = x[i]
-      v
-    end
-  end
-  y
-end
-
-ewa(x::AbstractVector{<:Union{Missing,Real}}, α::Real; fill_missing=false) = begin
-  @assert 0 < α < 1 "α must be in (0,1)"
-  y, n, i = similar(x), length(x), 1
-  @inbounds while i <= n && x[i] === missing
-    y[i] = missing; i += 1
-  end
-  if i <= n
-    y[i] = s = x[i]; i += 1
-    @inbounds for j in i:n
-      if x[j] === missing
-        y[j] = fill_missing ? s : missing
-      else
-        y[j] = s = α * x[j] + (1 - α) * s
-      end
-    end
-  end
-  y
-end
-
-roll_slow(op, vs::Vector{Union{Missing, Float64}}; window, min) = begin
-  r = Vector{Union{Missing, Float64}}(missing, length(vs))
-  for t in 1:length(vs)
-    vs[t] === missing && continue
-    present = skipmissing(vs[max((t - window + 1), 1):t])
-    count(_ -> true, present) ≥ min || continue
-    r[t] = op(present)
-  end
-  r
-end
-
-rperiod(rs::Vector; period::Int, overlap=false) = begin
-  @assert period > 0
-  n = length(rs)
-  rsp::Vector{Union{Missing,Float64}} = [begin
-    t2 = t + period - 1
-    if ismissing(rs[t]) || t2 > n
-      missing
-    else
-      count, sum = 0, 0.0; for i in t:t2-1
-        r = rs[i]; !ismissing(r) && (sum += r; count += 1)
-      end
-
-      rlast = rs[t2]
-      # If last return at t2 is non trading day using next trading day,
-      # but with the gap no more than 2 days.
-      max_last_gap = 2
-      if ismissing(rlast)
-        tlast = t2
-        while ismissing(rlast) && tlast < min(n, t2 + max_last_gap)
-          tlast += 1; rlast = rs[tlast]
-        end
-      end
-      # Return missing if insufficient data or last return is missing
-      ismissing(rlast) || (count + 1 < period/2) ? missing : sum + rlast
-    end
-  end for t in 1:n]
-
-  if overlap == false
-    i = 1; while i <= n
-      if ismissing(rsp[i]) i += 1 else
-        rsp[i+1:min(i+period-1, n)] .= missing
-        i += period
-      end
-    end
-  end
-
-  rsp
 end
 
 export nan_to_missing, missing_to_nan
