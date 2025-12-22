@@ -5,6 +5,7 @@ plot_xyc_by(
   title, ds; x, y, y2=nothing, color=nothing, by=nothing, detail=nothing,
   xdomain=nothing, ydomain=nothing, palette="viridis",
   xscale=nothing, yscale=nothing, pointsize=30, mark=:line_with_points, mark2=:line_with_points,
+  xtype=:quantitative, ytype=:quantitative,
   columns = 3,
   width=1024, ratio=1.5
 ) = begin
@@ -46,8 +47,8 @@ plot_xyc_by(
     mark == :circle           ? (type=:circle, clip=true) :
     (type=mark, clip=true,)
   encoding1 = (
-    x = (field=x, type=:quantitative, scale=xscale_props),
-    y = (field=y, type=:quantitative, scale=yscale_props),
+    x = (field=x, type=xtype, scale=xscale_props),
+    y = (field=y, type=ytype, scale=yscale_props),
     color_props...,
     detail_props...,
     poinsize_props...
@@ -63,7 +64,7 @@ plot_xyc_by(
       (type=mark2, clip=true,)
     encoding2 = (;
       encoding1...,
-      y = (field=y2, type=:quantitative, scale=yscale_props),
+      y = (field=y2, type=ytype, scale=yscale_props),
     )
     push!(layers, (mark=mark_props2, encoding=encoding2,))
   end

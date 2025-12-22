@@ -62,23 +62,24 @@ flatten(v::AbstractVector{<:AbstractVector}) = collect(Iterators.flatten(v))
 #   Printf.@printf(io, "%.*f", config[].show_round, f)
 # end
 
-export tdist_logpdf, tdist_logpdf_std
+export t_logpdf, t_logpdf_std
 
-@inline tdist_logpdf(ν, x) = begin
+@inline t_logpdf(ν, x) = begin
   @assert ν > 1 "ν must be > 1"
   c = loggamma((ν+1)/2) - loggamma(ν/2) - 0.5*log(ν*pi)
   c - (ν+1)/2 * log1p(x^2/ν)
 end
 
-@inline tdist_logpdf(μ, scale, ν, x) = begin
+@inline t_logpdf(μ, scale, ν, x) = begin
   @assert scale > 0 "σ must be > 0"
-  tdist_logpdf(ν, (x-μ)/scale) - log(scale)
+  t_logpdf(ν, (x-μ)/scale) - log(scale)
 end
 
-@inline tdist_logpdf_std(μ, σ, ν, x) = begin
+@inline t_logpdf_std(μ, σ, ν, x) = begin
   @assert σ > 0 "σ must be > 0"
+  @assert ν > 2 "ν must be > 2 for finite variance"
   scale = σ * sqrt((ν - 2) / ν)
-  tdist_logpdf(ν, (x-μ)/scale) - log(scale)
+  t_logpdf(ν, (x-μ)/scale) - log(scale)
 end
 
 Base.round(x::NamedTuple; opts...) =
@@ -98,7 +99,7 @@ export skipnan
 skipnan(x::AbstractArray) = Iterators.filter(!isnan, x)
 
 export say
-say(msg::String) = run(`say $msg`)
+say(msg::String) = begin run(`say $msg`); nothing end
 
 export mscore
 mscore(x::Vector{Union{Missing,T}}; c=nothing) where {T<:Real} = begin
@@ -112,6 +113,9 @@ export nan_to_missing, missing_to_nan
 nan_to_missing(x::AbstractArray{Float64}) = map(v -> isnan(v) ? missing : v, x)
 missing_to_nan(x::AbstractArray{Union{Missing,Float64}}) = map(v -> ismissing(v) ? NaN : v, x)
 
+export never
 never(msg="Never") = throw(ErrorException(msg))
+
+
 
 end

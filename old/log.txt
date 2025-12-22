@@ -1,3 +1,12 @@
+  scales = Dict(s => begin
+    rs = skipnan(getindex.(r2, 1))
+    median(abs.(rs .- median(rs)))
+  end for (s, r2) in r2s)
+
+
+
+
+
 rperiod(rs::Vector; period::Int, overlap=true) = begin
   @assert period > 0
   n = length(rs)

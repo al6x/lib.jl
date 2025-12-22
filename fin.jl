@@ -1,3 +1,5 @@
+import StatsBase
+
 StatsBase.meanad(x, center::Union{Nothing,Float64}=nothing) = begin
   present = skipmissing(x)
   center === nothing && (center = median(present))
@@ -47,43 +49,51 @@ roll_slow(op, vs::Vector{Union{Missing, Float64}}; window, min) = begin
   r
 end
 
-rperiod(rs::Vector; period::Int, overlap=false) = begin
+rperiod(rs::Vector{Union{Missing,Float64}}; period::Int, overlap=false) = begin
   @assert period > 0
   n = length(rs)
-  rsp::Vector{Union{Missing,Float64}} = [begin
+  rsp, psp = Vector{Union{Missing,Float64}}(undef, n), Vector{Union{Missing,Int}}(undef, n)
+  for t in 1:n
     t2 = t + period - 1
-    if ismissing(rs[t]) || t2 > n
-      missing
+    rsp[t], psp[t] = if ismissing(rs[t]) || t2 > n
+      missing, missing
     else
       count, sum = 0, 0.0; for i in t:t2-1
         r = rs[i]; !ismissing(r) && (sum += r; count += 1)
       end
 
-      rlast = rs[t2]
+      rlast, tlast = rs[t2], t2
       # If last return at t2 is non trading day using next trading day,
       # but with the gap no more than 2 days.
       max_last_gap = 2
       if ismissing(rlast)
-        tlast = t2
         while ismissing(rlast) && tlast < min(n, t2 + max_last_gap)
           tlast += 1; rlast = rs[tlast]
         end
       end
       # Return missing if insufficient data or last return is missing
-      ismissing(rlast) || (count + 1 < period/2) ? missing : sum + rlast
+      ismissing(rlast) || (count + 1 < period/2) ?
+        (missing, missing) :
+        (sum + rlast, tlast - t + 1)
     end
-  end for t in 1:n]
+  end
 
   if overlap == false
     i = 1; while i <= n
       if ismissing(rsp[i]) i += 1 else
         rsp[i+1:min(i+period-1, n)] .= missing
+        psp[i+1:min(i+period-1, n)] .= missing
         i += period
       end
     end
   end
 
-  rsp
+  rsp, psp
+end
+
+rperiod_as_tuples(rs::Vector{Union{Missing,Float64}}; period::Int, overlap=false) = begin
+  r2s, p2s = rperiod(rs; period, overlap)
+  [(r2, p2) for (r2, p2) in zip(r2s |> missing_to_nan, float.(p2s) |> missing_to_nan)]
 end
 
 # Output variance, not scale
@@ -131,8 +141,11 @@ yang_zhang_rv(input::NamedTuple) = begin
 end
 
 
-garman_klass_rv(o::Float64, h::Float64, l::Float64, c::Float64) =
-  0.5 * log(h / l)^2 - (2 * log(2) - 1) * log(c / o)^2
+garman_klass_rv(o::Float64, h::Float64, l::Float64, c::Float64) = begin
+  rv = 0.5 * log(h / l)^2 - (2 * log(2) - 1) * log(c / o)^2
+  @assert rv ≥ 0 "rv negative: $o, $h, $l, $c"
+  rv
+end
 
 garman_klass_rv(input::NamedTuple) = begin
   (; o, h, l, c) = input; n = length(c)
