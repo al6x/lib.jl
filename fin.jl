@@ -419,29 +419,29 @@ end
 
 # log trunc InvGamma moments -----------------------------------------------------------------------
 # E[log X_trunc], X_trunc = m tanh(√(X/m))^2, X ~ InvGamma(ν/2, ν/2), m = Q(p_trunc)
-log_inv_gamma_trunc_mean(nu, p_trunc=0.9998) = begin
+log_inv_gamma_trunc_mean(nu, p_trunc=0.9999) = begin
   @assert 2.7 <= nu <= 100.0 "nu out of range"
-  @assert p_trunc == 0.9998 "p_trunc must be 0.9998"
+  @assert p_trunc == 0.9999 "p_trunc must be 0.9999"
   snu = sqrt(nu)
-  -8.385624358479423e-01 +
-    4.9783461e-01   * exp(-1.174725e-02 * snu)   +
-    5.7340695e-01   * exp(-2.2462881e-01 * snu)  +
-    6.9264932e-01   * exp(-6.3617036e-01 * snu)  +
-    7.7644988e-01   * exp(-1.62791129e+00 * snu) +
-    1.941587793e+01 * exp(-3.44820119e+00 * snu)
+  -2.71697996036676725e+00 +
+    2.3484903846e+00 * exp(-1.6131601796e-03 * snu) +
+    5.3822612033e-01 * exp(-1.9233343728e-01 * snu) +
+    6.5922060593e-01 * exp(-5.5775314934e-01 * snu) +
+    4.8408263607e-01 * exp(-1.4130426872e+00 * snu) +
+    1.7416844914e+01 * exp(-3.2534292363e+00 * snu)
 end
 
 # Sd[log X_trunc], X_trunc = m tanh(√(X/m))^2, X ~ InvGamma(ν/2, ν/2), m = Q(p_trunc)
-log_inv_gamma_trunc_sd(nu, p_trunc=0.9998) = begin
+log_inv_gamma_trunc_sd(nu, p_trunc=0.9999) = begin
   @assert 2.7 <= nu <= 100.0 "nu out of range"
-  @assert p_trunc == 0.9998 "p_trunc must be 0.9998"
+  @assert p_trunc == 0.9999 "p_trunc must be 0.9999"
   snu = sqrt(nu)
-  3.0114684157074526e-02 +
-    2.5054106e-01   * exp(-1.4004671e-01 * snu)  +
-    7.3624265e-01   * exp(-4.6981411e-01 * snu)  +
-    1.67561183e+00  * exp(-1.02679808e+00 * snu) +
-    2.97687948e+00  * exp(-1.96778207e+00 * snu) +
-    3.123797783e+01 * exp(-4.16020499e+00 * snu)
+  2.58618624904400837e-02 +
+    2.1582917549e-01 * exp(-1.2200838351e-01 * snu) +
+    6.4704095897e-01 * exp(-4.1770244444e-01 * snu) +
+    1.5063535639e+00 * exp(-9.2833915995e-01 * snu) +
+    2.5596159650e+00 * exp(-1.7944480533e+00 * snu) +
+    2.8188485775e+01 * exp(-3.9457466871e+00 * snu)
 end
 
 
