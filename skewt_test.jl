@@ -1,6 +1,6 @@
-include.(["./skewt.jl", "./Lib.jl"])
 using Test, PyCall, Statistics
-using .Lib
+using Lib
+includet("skewt.jl")
 
 py"""
 import numpy as np
@@ -48,6 +48,11 @@ def skewt_quantile(μ, σ, ν, λ, p):
     @test quantile.(SkewT.(0.1, 1.2, νs, λs), qs) ≈ py"skewt_quantile".(0.1, 1.2, νs, λs, qs)
   end
 
+  tdist_logpdf_std(μ, σ, ν, x) = begin
+    s = σ * sqrt((ν - 2) / ν)
+    logpdf(Distributions.LocationScale(μ, s, Distributions.TDist(ν)), x)
+  end
+
   @test skewt_logpdf(0.1, 1.2, 3.0, 0.0, 1.5) ≈ tdist_logpdf_std(0.1, 1.2, 3.0, 1.5)
 end;
 
@@ -57,7 +62,7 @@ end;
     (; μ, σ, ν, λ) = fit_mle(SkewT, x)
     @test [μ, σ, ν, λ] ≈ [1.0, 2.0, 5.0, 0.5] rtol=0.1
   end
-end
+end;
 
 @testset "SkewT fit_mle_fixed" begin
   Random.seed!(0) do
@@ -65,10 +70,10 @@ end
     (; μ, σ, ν, λ) = fit_mle(SkewT, x, (ν=5.0,))
     @test [μ, σ, ν, λ] ≈ [1.0, 2.0, 5.0, 0.5] rtol=0.1
   end
-end
+end;
 
 @testset "SkewT mean_exp" begin
   # E[e^x] should be larger than normal
   d = SkewT(0.0, 0.15, 3.0, 0.0)
   @test mean_exp(d; l=quantile(d, 1e-6), h=quantile(d, 1-1e-6)) > exp(0.5*0.15^2)
-end
+end;

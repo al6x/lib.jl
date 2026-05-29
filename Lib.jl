@@ -1,17 +1,50 @@
 module Lib
 
 import Printf, Optim, CSV
-using Statistics, Random
+using Statistics, Random, Distributions
 using SpecialFunctions: loggamma
+using StatsFuns: logaddexp, logit
 
-export dedent, configure!, unzip, flatten, spread,
-  smape, sigmoid, abs_soft, ensure_converged
+export logit
+
+export @p
+macro p(ex)
+  quote
+    val = $(esc(ex))
+    println($(string(ex)), " = ", val)
+    val
+  end
+end
+
+export dedent, configure!, unzip, spread,
+  smape, sigmoid, softabs, ensure_converged
 
 smape(y, ŷ, ϵ = 1e-6) = abs(y - ŷ) / ((abs(y) + abs(ŷ) + ϵ) / 2)
 
 @inline sigmoid(x) = 1.0 / (1.0 + exp(-x))
+# @inline logit(x) = log(x / (1 - x))
 
-# abs_soft(x; δ=1e-3) = δ^2 * (sqrt(1 + (x/δ)^2) - 1)
+export sigmoid_scaled
+@inline sigmoid_scaled(l::Real, h::Real, c::Real, z::Real) = begin
+  @assert l < c < h "c out of range"
+  l + (h - l) * sigmoid(logit((c - l) / (h - l)) + z)
+end
+
+
+softabs(x, ϵ) = sqrt(x*x + ϵ*ϵ) - ϵ
+
+export softplus
+# @inline softplus(x, α) = log1p(exp(α*x)) / α
+@inline softplus(x, α) = begin
+  y = α * x
+  (max(y, 0) + log1p(exp(-abs(y)))) / α
+end
+
+export softmax
+@inline softmax(a, b, α) = logaddexp(α*a, α*b)/α # log(exp(α a) + exp(α b))/α
+
+export softmin
+@inline softmin(a, b, α) = -logaddexp(-α*a, -α*b)/α # -log(exp(-α a) + exp(-α b))/α
 
 ensure_converged(
   r::Union{Optim.UnivariateOptimizationResults, Optim.MultivariateOptimizationResults}
@@ -48,19 +81,7 @@ end
 
 unzip(rows::Base.Generator) = unzip(collect(rows))
 
-flatten(v::AbstractVector{<:AbstractVector}) = collect(Iterators.flatten(v))
-
-# mutable struct LibConfig show_round::Int end
-# const config = Ref{Union{LibConfig, Nothing}}(nothing)
-
-# function configure!(; show_round=4)
-#   config[] = LibConfig(show_round)
-# end
-# configure!()
-
-# function Base.show(io::IO, f::Float64)
-#   Printf.@printf(io, "%.*f", config[].show_round, f)
-# end
+# flatten(v::AbstractVector{<:AbstractVector}) = collect(Iterators.flatten(v))
 
 export t_logpdf, t_logpdf_std
 
@@ -82,8 +103,22 @@ end
   t_logpdf(ν, (x-μ)/scale) - log(scale)
 end
 
-Base.round(x::NamedTuple; opts...) =
-  (; (k => v isa AbstractFloat ? round(v; opts...) : v for (k,v) in pairs(x))...)
+
+round_any(x; opts...) = x
+round_any(x::AbstractFloat; opts...) = round(x; opts...)
+round_any(x::NamedTuple; opts...) = (; (k => round_any(v; opts...) for (k,v) in pairs(x))...)
+round_any(x::NTuple{N, Any}; opts...) where {N} = ntuple(i -> round_any(x[i]; opts...), N)
+round_any(x::AbstractArray; opts...) = round_any.(x; opts...)
+
+Base.round(x::NamedTuple; opts...) = round_any(x; opts...)
+Base.round(x::Tuple; opts...) = round_any(x; opts...)
+Base.round(x::AbstractArray; opts...) = round_any(x; opts...)
+
+export round4
+round4(x) = round_any(x; digits=4)
+
+export round6
+round6(x) = round_any(x; digits=6)
 
 Random.seed!(op::Function, seed::Integer) = begin
   state = copy(Random.default_rng())
@@ -95,18 +130,24 @@ Random.seed!(op::Function, seed::Integer) = begin
   end
 end
 
-export skipnan
+export skipnan, skipnothing
 skipnan(x::AbstractArray) = Iterators.filter(!isnan, x)
+skipnothing(x::AbstractArray) = Iterators.filter(!isnothing, x)
 
 export say
 say(msg::String) = begin run(`say $msg`); nothing end
 
-export mscore
-mscore(x::Vector{Union{Missing,T}}; c=nothing) where {T<:Real} = begin
+export mean_meanad
+mean_meanad(x::AbstractArray{T}) where {T<:Union{Missing,Real}} = begin
   present = skipmissing(x)
-  c === nothing && (c = median(present))
-  s = median(abs.(present .- c))
-  (x .- c) ./ s
+  c = mean(present); s = mean(abs.(present .- c))
+  c, s
+end
+
+export to_mean_meanad
+to_mean_meanad(x::AbstractArray{T}) where {T<:Union{Missing,Real}} = begin
+  c, s = mean_meanad(x)
+  (x .- c) ./ s, c, s
 end
 
 export nan_to_missing, missing_to_nan
@@ -116,6 +157,46 @@ missing_to_nan(x::AbstractArray{Union{Missing,Float64}}) = map(v -> ismissing(v)
 export never
 never(msg="Never") = throw(ErrorException(msg))
 
+export fit_robust
+fit_robust(::Type{Normal}, x; iqr=((0.1587, 0.5, 0.8413), 2)) = begin
+  qs, m = iqr
+  q = quantile(x, qs)
+  μ, σ = q[2], (q[3] - q[1]) / m
+  @assert σ > 0 "IQR-based σ must be > 0"
+  Normal(μ, σ)
+end
 
+export symlink
+symlink(src, dst; force::Bool=false) = begin
+  force && (ispath(dst) || islink(dst)) && rm(dst; force=true)
+  Base.Filesystem.symlink(src, dst)
+end
+
+run_cmd(
+  cmd::Cmd, args::Union{Nothing,NamedTuple,String}=nothing; stdin::Union{Nothing,String}=nothing
+) = begin
+  if isa(args, String)
+    cmd = `$cmd $args`
+  elseif isa(args, NamedTuple)
+    cmd = `$cmd $(["$(k)=$(v)" for (k,v) in pairs(args)]...)`
+  end
+
+  out, err = Pipe(), Pipe()
+  proc = run(pipeline(
+    cmd, stdin = stdin === nothing ? devnull : IOBuffer(stdin), stdout = out, stderr = err
+  ), wait=false)
+  close(out.in); close(err.in)
+  stdout, stderr = read(out, String), read(err, String)
+  wait(proc)
+
+  proc.exitcode, stdout, stderr
+end
+
+export show_table
+show_table(ds) = Main.vscodedisplay(ds)
+
+export isgteapprox, islteapprox
+isgteapprox(x, y; args...) = x > y || isapprox(x, y; args...)
+islteapprox(x, y; args...) = x < y || isapprox(x, y; args...)
 
 end

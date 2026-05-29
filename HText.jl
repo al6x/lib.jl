@@ -1,6 +1,6 @@
 module HText
 
-using ..Lib
+using Lib
 import JSON
 
 # Helpers ------------------------------------------------------------------------------------------
@@ -78,6 +78,9 @@ save_asset(d::Doc, name::AbstractString, obj; id=nothing, tags=nothing, tab=noth
 
   text(d, name; id, tags, tab)
   text(d, "![$name](this/$fname)")
+
+  display(obj)
+
   path
 end
 

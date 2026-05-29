@@ -1,15 +1,19 @@
+module SkewTs
+
 import Statistics, SpecialFunctions, StatsFuns, Optim, Distributions, Random
 import Distributions: logpdf, pdf, cdf, quantile, fit_mle
 import Random: rand
-import Statistics: mean, std
+import Statistics: mean, std, median
 import QuadGK, Interpolations
+
+export SkewT, logpdf, skewt_logpdf, pdf, cdf, quantile, rand, fit_mle, mean_exp, skewt_mean_exp_adj
 
 struct SkewT{T<:Real} <: Distributions.ContinuousUnivariateDistribution
   μ::T; σ::T; ν::T; λ::T
   a::T; b::T; c::T
 end
 
-function SkewT(μ::T, σ::T, ν::T, λ::T) where {T<:Real}
+SkewT(μ::T, σ::T, ν::T, λ::T) where {T<:Real} = begin
   σ > 0       || throw(DomainError(σ, "σ must be > 0"))
   ν > 2.05    || throw(DomainError(ν, "ν must be > 2.05"))
   abs(λ) < 1  || throw(DomainError(λ, "|λ| must be < 1"))
@@ -201,4 +205,6 @@ fit_mle_free_bounded(::Type{SkewT}, x::AbstractVector{<:Real}) = begin
   end
 
   error("Can't estimate SkewT")
+end
+
 end

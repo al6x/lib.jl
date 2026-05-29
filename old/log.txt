@@ -1,3 +1,81 @@
+# export mscore
+# mscore(x::Vector{<:Union{Missing,T}}; center=nothing) where {T<:Real} = begin
+#   throw("mscore is wrong")
+#   # present = skipmissing(x)
+#   # center === nothing && (center = median(present))
+#   # s = median(abs.(present .- center))
+#   # (x .- center) ./ s
+# end
+
+# mutable struct LibConfig show_round::Int end
+# const config = Ref{Union{LibConfig, Nothing}}(nothing)
+
+# function configure!(; show_round=4)
+#   config[] = LibConfig(show_round)
+# end
+# configure!()
+
+# function Base.show(io::IO, f::Float64)
+#   Printf.@printf(io, "%.*f", config[].show_round, f)
+# end
+
+# (; (k => v isa AbstractFloat ? round(v; opts...) : v for (k,v) in pairs(x))...)
+
+
+# (; (k => v isa AbstractFloat ? round(v; opts...) : v for (k,v) in pairs(x))...)
+# ntuple(i -> x[i] isa AbstractFloat ? round(x[i]; opts...) : x[i], N)
+
+# Base.round(x::NamedTuple; opts...) =
+#   (; (k => v isa AbstractFloat ? round(v; opts...) : v for (k,v) in pairs(x))...)
+
+# Base.round(x::NTuple{N, Any}; opts...) where {N} =
+#   # (; (k => v isa AbstractFloat ? round(v; opts...) : v for (k,v) in pairs(x))...)
+#   ntuple(i -> x[i] isa AbstractFloat ? round(x[i]; opts...) : x[i], N)
+
+
+
+
+
+llh(
+  M::NamedTuple, H::NamedTuple, R::Vector{RT},
+  inputs::Vector{Vector{NTuple{N, Float64}}}, r2s::Vector{Vector{NTuple{2, Float64}}};
+  weights::Union{Nothing,Vector{Vector{Float64}}}=nothing, parallel=false
+) where {N, RT<:Real} = begin
+  n = length(inputs)
+  llhs, counts = Vector{RT}(undef, n), zeros(Int, n)
+
+  if parallel
+    Threads.@threads for i in eachindex(inputs)
+      ws = weights === nothing ? nothing : weights[i]
+      llhs[i], counts[i] = Garch.llh(M, H, R, inputs[i], r2s[i]; weights=ws)
+    end
+  else
+    for i in eachindex(inputs)
+      ws = weights === nothing ? nothing : weights[i]
+      llhs[i], counts[i] = Garch.llh(M, H, R, inputs[i], r2s[i]; weights=ws)
+    end
+  end
+
+  sum(llhs), sum(counts)
+end;
+
+
+let
+  llh, count = Garch.llh(M, H, R, inputs, r2s; parallel)
+  @show fit_counts, count
+  @assert sum(fit_counts) == count "Counts during fit and predict must match"
+  # nllh = llh/count + log(scale)
+  nllh = llh/count + log(mean(scales))
+  @show "old", nllh, count
+end
+
+
+
+
+
+
+
+
   scales = Dict(s => begin
     rs = skipnan(getindex.(r2, 1))
     median(abs.(rs .- median(rs)))

@@ -1,3 +1,5 @@
+import ForwardDiff
+
 @inline isfinite_dual(x::ForwardDiff.Dual) =
   isfinite(ForwardDiff.value(x)) && all(isfinite, ForwardDiff.partials(x))
 @inline isfinite_dual(x::Number) = isfinite(x)

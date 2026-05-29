@@ -1,4 +1,4 @@
-includet("../skewt.jl")
+include("../skewt.jl")
 using DataFrames, Random, Statistics, StatsBase, Optim, Distributions, Plots
 
 Random.seed!(0)
