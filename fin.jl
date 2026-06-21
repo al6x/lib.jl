@@ -1,8 +1,7 @@
 module Fin
 
-import StatsBase, LinearAlgebra, SpecialFunctions, Roots
+import StatsBase, LinearAlgebra, SpecialFunctions
 using Distributions, Lib, Dates
-using StatsFuns: normcdf
 
 # Includes from and to
 calendar_to_trading(from::Date, to::Date) = begin
@@ -417,9 +416,9 @@ log_inv_gamma_meanad_approx(nu) = begin
   0.53765492 * nu^-1.58717139
 end
 
-# log trunc InvGamma moments -----------------------------------------------------------------------
-# E[log X_trunc], X_trunc = m tanh(√(X/m))^2, X ~ InvGamma(ν/2, ν/2), m = Q(p_trunc)
-log_inv_gamma_trunc_mean(nu, p_trunc=0.9999) = begin
+# log softcap InvGamma moments ---------------------------------------------------------------------
+# E[log X_softcap], X_softcap = m tanh(√(X/m))^2, X ~ InvGamma(ν/2, ν/2), m = Q(p_trunc)
+log_inv_gamma_softcap_mean(nu, p_trunc=0.9999) = begin
   @assert 2.7 <= nu <= 100.0 "nu out of range"
   @assert p_trunc == 0.9999 "p_trunc must be 0.9999"
   snu = sqrt(nu)
@@ -431,8 +430,8 @@ log_inv_gamma_trunc_mean(nu, p_trunc=0.9999) = begin
     1.7416844914e+01 * exp(-3.2534292363e+00 * snu)
 end
 
-# Sd[log X_trunc], X_trunc = m tanh(√(X/m))^2, X ~ InvGamma(ν/2, ν/2), m = Q(p_trunc)
-log_inv_gamma_trunc_sd(nu, p_trunc=0.9999) = begin
+# Sd[log X_softcap], X_softcap = m tanh(√(X/m))^2, X ~ InvGamma(ν/2, ν/2), m = Q(p_trunc)
+log_inv_gamma_softcap_sd(nu, p_trunc=0.9999) = begin
   @assert 2.7 <= nu <= 100.0 "nu out of range"
   @assert p_trunc == 0.9999 "p_trunc must be 0.9999"
   snu = sqrt(nu)
@@ -555,44 +554,5 @@ end
 tdist_meanad(ν) =
   (2*sqrt(ν)*SpecialFunctions.gamma((ν+1)/2)) /
   (sqrt(pi)*(ν-1)*SpecialFunctions.gamma(ν/2))
-
-
-# Black-Scholes price and implied volatility -------------------------------------------------------
-# T in days, r1y in float percentages like 0.05
-bs_price(; K, T, r1y, q=0.0, σ, right) = begin
-  τ, S = T/365, 1.0
-  sτ = σ*sqrt(τ)
-  d1 = (log(S/K) + (r1y - q + σ^2/2)*τ)/sτ
-  d2 = d1 - sτ
-  right == :call ?
-    S*exp(-q*τ)*normcdf(d1) - K*exp(-r1y*τ)*normcdf(d2) :
-    K*exp(-r1y*τ)*normcdf(-d2) - S*exp(-q*τ)*normcdf(-d1)
-end
-
-implied_vol(; price, K, T, r1y, right, q=0.0, atol=1e-9) = begin
-  τ, S = T/365, 1.0
-  lo, hi = right == :call ?
-    (max(S*exp(-q*τ) - K*exp(-r1y*τ), 0.0), S*exp(-q*τ)) :
-    (max(K*exp(-r1y*τ) - S*exp(-q*τ), 0.0), K*exp(-r1y*τ))
-  # @assert lo <= price <= hi "no arbitrage violated: $((; price, K, T, r1y, q, right))"
-  lo <= price <= hi || return nothing
-
-  f(σ) = bs_price(; K, T, r1y, q, σ, right) - price
-  Roots.find_zero(f, (1e-6, 5.0), Roots.Brent(); atol)
-end
-
-implied_vol_df(; price, K, T, df, right, q=0.0, atol=1e-9) = begin
-  r1y = -log(df) / (T/365)
-  implied_vol(; price, K, T, r1y, right, q, atol)
-end
-
-
-# implied_vol(; price, K, T, r1y, right, q=0.0, rtol=0.001, atol=1e-6) = begin
-#   @show price, K, T, r1y, q, right
-#   @assert 1e-8 < price <= 1.0 "price out of range"
-#   Roots.find_zero(σ ->
-#     bs_price(; K, T, r1y, q, σ, right) - price, (1e-8, 1.0),
-#   Roots.Brent(); rtol, atol)
-# end
 
 end
