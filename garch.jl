@@ -2,7 +2,7 @@ module Garch
 
 include("duals.jl")
 
-using Random, Statistics, Optim, ForwardDiff, SpecialFunctions, Lib
+using Random, Statistics, Optim, ForwardDiff, SpecialFunctions, Lib, ADTypes
 import Fin
 
 # Protocol
@@ -171,11 +171,10 @@ fit(
       interrupted() && return true
       f_atol === nothing && return false
 
-      state = last(tr)
-      loss = state.value
+      loss = tr.f_x
 
       if loss < best_loss
-        best_loss, best_R = loss, copy(state.metadata["x"])
+        best_loss, best_R = loss, copy(tr.x)
       end
 
       if loss < loss_progress - f_atol
@@ -188,7 +187,8 @@ fit(
     end
 
     options = Optim.Options(; callback, extended_trace=true, store_trace=true)
-    r = optimize(Loss(H), lower, upper, R, Fminbox(LBFGS()), options; autodiff=:forward)
+    r = optimize(Loss(H), lower, upper, R, Fminbox(LBFGS()), options;
+      autodiff=ADTypes.AutoForwardDiff())
     # optimize(loss, lower, upper, R_init, Fminbox(LBFGS()))
     # optimize(loss, lower, upper, R_init, Fminbox(NelderMead()))
     R, loss = if !isnothing(f_atol) && (stagnant > patience)

@@ -1,6 +1,6 @@
 module SkewTs
 
-import Statistics, SpecialFunctions, StatsFuns, Optim, Distributions, Random
+import Statistics, SpecialFunctions, StatsFuns, Optim, Distributions, Random, ADTypes
 import Distributions: logpdf, pdf, cdf, quantile, fit_mle
 import Random: rand
 import Statistics: mean, std, median
@@ -103,7 +103,7 @@ fit_mle_free(::Type{SkewT}, x::AbstractVector{<:Real}) = begin
   ]
 
   for init in inits
-    res = Optim.optimize(nll, init, Optim.BFGS(); autodiff = :forward)
+    res = Optim.optimize(nll, init, Optim.BFGS(); autodiff = ADTypes.AutoForwardDiff())
     !Optim.converged(res) && continue
     θ = Optim.minimizer(res)
     return SkewT(decode(θ)...)
@@ -135,7 +135,7 @@ fit_mle_fixed(::Type{SkewT}, x::AbstractVector{<:Real}; fix::NamedTuple) = begin
     -sum(logpdf.(Ref(d), x))
   end
 
-  res = Optim.optimize(nll, init, Optim.BFGS(); autodiff = :forward)
+  res = Optim.optimize(nll, init, Optim.BFGS(); autodiff = ADTypes.AutoForwardDiff())
 
   Q = Optim.converged(res) ? Optim.minimizer(res) : error("Can't estimate SkewT")
   SkewT(decode(Q)...)
@@ -198,7 +198,8 @@ fit_mle_free_bounded(::Type{SkewT}, x::AbstractVector{<:Real}) = begin
   ]
 
   for init in inits
-    res = Optim.optimize(nll, lower, upper, init, Optim.Fminbox(Optim.BFGS()); autodiff = :forward)
+    res = Optim.optimize(nll, lower, upper, init, Optim.Fminbox(Optim.BFGS());
+      autodiff = ADTypes.AutoForwardDiff())
     !Optim.converged(res) && continue
     Q = Optim.minimizer(res)
     return SkewT(Q...)
