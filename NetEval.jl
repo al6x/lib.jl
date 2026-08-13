@@ -21,6 +21,7 @@ json(x::Integer) = string(x)
 eval_code(code) = begin
   out_path, out = mktemp(); err_path, errout = mktemp()
   try
+    isdefined(Main, :Revise) && Core.eval(Main, :(Revise.revise()))
     result = redirect_stdout(out) do
       redirect_stderr(errout) do
         Core.eval(Main, Meta.parse("begin\n$code\nend"))

@@ -8,7 +8,7 @@ plot_xyc_by(
   xdomain=nothing, ydomain=nothing, palette="viridis",
   xscale=nothing, yscale=nothing, pointsize=30, mark=:line_with_points,
 
-  y, opacity=1.0,
+  y=nothing, opacity=1.0,
   y2=nothing, mark2=:line_with_points, opacity2=1.0,
   y3=nothing, mark3=:line_with_points, opacity3=1.0,
   bound::Union{Nothing, Tuple{Any, Any}}=nothing, opacity_bound=0.2,
@@ -30,7 +30,8 @@ plot_xyc_by(
   xscale === nothing && (xscale = "linear")
   yscale === nothing && (yscale = "linear")
 
-  tparts = ["$title x=$x, y=$y"]
+  tparts = ["$title x=$x"]
+  y      !== nothing && push!(tparts, ", y=$y")
   color  !== nothing && push!(tparts, ", color=$color")
   detail !== nothing && push!(tparts, "($detail)")
   by     !== nothing && push!(tparts, " by=$by")
@@ -50,21 +51,22 @@ plot_xyc_by(
   npointsize = by === nothing ? pointsize : round(Int, pointsize/columns)
   poinsize_props = mark in (:point, :circle) ? (size=(value=npointsize,),) : (;)
 
-  # y1
   layers = []
-  mark_props1 =
-    mark == :line             ? (; type=:line, clip=true, opacity) :
-    mark == :line_with_points ? (; type=:line, clip=true, point=true, opacity) :
-    mark == :circle           ? (; type=:circle, clip=true, opacity) :
-    (; type=mark, clip=true, opacity,)
-  encoding1 = (
+  encoding_base = (
     x = (field=x, type=xtype, scale=xscale_props),
-    y = (field=y, type=ytype, scale=yscale_props),
     color_props...,
     detail_props...,
     poinsize_props...
   )
-  push!(layers, (mark=mark_props1, encoding=encoding1,))
+  if y !== nothing
+    mark_props1 =
+      mark == :line             ? (; type=:line, clip=true, opacity) :
+      mark == :line_with_points ? (; type=:line, clip=true, point=true, opacity) :
+      mark == :circle           ? (; type=:circle, clip=true, opacity) :
+      (; type=mark, clip=true, opacity,)
+    encoding1 = (; encoding_base..., y = (field=y, type=ytype, scale=yscale_props))
+    push!(layers, (mark=mark_props1, encoding=encoding1,))
+  end
 
   add_yn(yn, markn, opacity) = begin
     mark_props =
@@ -75,7 +77,7 @@ plot_xyc_by(
       (type=markn, clip=true, opacity=opacity,)
 
     encoding = (;
-      encoding1...,
+      encoding_base...,
       y = (field=yn, type=ytype, scale=yscale_props),
     )
 
@@ -88,7 +90,7 @@ plot_xyc_by(
     mark_props = (; type=:area, clip=true, opacity)
 
     encoding = (;
-      encoding1...,
+      encoding_base...,
       y = (field=ylo, type=ytype, scale=yscale_props),
       y2 = (field=yhi,),
     )
