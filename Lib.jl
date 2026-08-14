@@ -28,10 +28,15 @@ smape(y, ŷ, ϵ = 1e-6) = abs(y - ŷ) / ((abs(y) + abs(ŷ) + ϵ) / 2)
 @inline sigmoid(x) = 1.0 / (1.0 + exp(-x))
 # @inline logit(x) = log(x / (1 - x))
 
-export sigmoid_scaled
+export sigmoid_scaled, logit_scaled
 @inline sigmoid_scaled(l::Real, h::Real, c::Real, z::Real) = begin
   @assert l < c < h "c out of range"
   l + (h - l) * sigmoid(logit((c - l) / (h - l)) + z)
+end
+logit_scaled(l::Real, h::Real, c::Real, x::Real) = begin
+  @assert l < c < h "c out of range"
+  @assert l < x < h "x out of range"
+  logit((x - l) / (h - l)) - logit((c - l) / (h - l))
 end
 
 
