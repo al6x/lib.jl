@@ -1,9 +1,11 @@
 module Lib
 
-import Printf, Optim, CSV, JSON, SHA
+import Printf, Optim, CSV
 using Statistics, Random, Distributions
 using SpecialFunctions: loggamma
 using StatsFuns: logaddexp, logit
+
+include("Lib/vhash.jl")
 
 export logit
 
@@ -16,12 +18,8 @@ macro p(ex)
   end
 end
 
-export dedent, configure!, unzip, spread, vhash,
+export dedent, configure!, unzip, spread, vhash, vhash!,
   smape, sigmoid, softabs, ensure_converged
-
-vhash(x::Union{AbstractString,AbstractVector{UInt8}}) = bytes2hex(SHA.sha256(x))[1:12]
-vhash(x::Union{Bool,Integer,AbstractFloat}) = vhash(string(x))
-vhash(x) = vhash(JSON.json(x))
 
 smape(y, ŷ, ϵ = 1e-6) = abs(y - ŷ) / ((abs(y) + abs(ŷ) + ϵ) / 2)
 
