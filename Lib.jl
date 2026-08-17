@@ -18,9 +18,17 @@ macro p(ex)
   end
 end
 
-export dedent, configure!, unzip, spread, vhash, vhash!,
+export dedent, configure!, unzip, spread, vhash, vhash!, get_cached,
   smape, sigmoid, softabs, ensure_converged
 
+get_cached(make::Function, cache, key; max=nothing) = begin
+  if max !== nothing && length(cache) >= max && !haskey(cache, key)
+    key_drop = first(keys(cache))
+    @warn "cache full, dropping entry" max key_drop
+    delete!(cache, key_drop)
+  end
+  get!(make, cache, key)
+end
 smape(y, ŷ, ϵ = 1e-6) = abs(y - ŷ) / ((abs(y) + abs(ŷ) + ϵ) / 2)
 
 @inline sigmoid(x) = 1.0 / (1.0 + exp(-x))
