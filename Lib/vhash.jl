@@ -52,6 +52,13 @@ vhash!(acc, x::AbstractVector) = begin
   vhash_update!(acc, "]")
 end
 
+vhash!(acc, x::AbstractArray) = begin
+  vhash_update!(acc, "a[")
+  vhash!(acc, size(x))
+  foreach(v -> vhash!(acc, v), x)
+  vhash_update!(acc, "]")
+end
+
 vhash!(acc, x::NamedTuple) = begin
   vhash_update!(acc, "nt{")
   for k in keys(x)
@@ -70,7 +77,17 @@ vhash!(acc, x::AbstractDict) = begin
   vhash_update!(acc, "}")
 end
 
-vhash!(acc, x) = error("vhash unsupported type: $(typeof(x))")
+vhash!(acc, x) = begin
+  T = typeof(x)
+  isstructtype(T) || error("vhash unsupported type: $T")
+  vhash_update!(acc, "struct{")
+  vhash!(acc, string(parentmodule(T), ".", nameof(T)))
+  for name in fieldnames(T)
+    vhash!(acc, string(name))
+    vhash!(acc, getfield(x, name))
+  end
+  vhash_update!(acc, "}")
+end
 
 put_s!(acc, s::AbstractString) = begin
   vhash_update!(acc, s)
