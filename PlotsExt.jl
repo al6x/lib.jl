@@ -15,7 +15,7 @@ plot_xyc_by(
 
   xrulers=[], yrulers=[],
 
-  xtype=:quantitative, ytype=:quantitative,
+  xtype=:quantitative, ytype=:quantitative, resolve_y=nothing,
   columns = 3,
   width=1024, ratio=1.5
 ) = begin
@@ -117,13 +117,15 @@ plot_xyc_by(
   height = ceil(Int, width/ratio)
   width_prop  = by === nothing ? width  : ceil(Int, width/columns)
   height_prop = by === nothing ? height : ceil(Int, height/columns)
+  resolve_props = resolve_y === nothing ? (;) : (; resolve=(; scale=(; y=resolve_y)))
   vspec = by === nothing ?
     (title=ftitle, layer=layers, width=width_prop, height=height_prop) :
     (
       title=ftitle,
       facet=(field=String(by), type=:ordinal),
       columns,
-      spec=(layer=layers, width=width_prop, height=height_prop)
+      spec=(layer=layers, width=width_prop, height=height_prop),
+      resolve_props...
     )
 
   spec_json = JSON.json(vspec)

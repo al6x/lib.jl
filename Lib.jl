@@ -34,23 +34,23 @@ smape(y, ŷ, ϵ = 1e-6) = abs(y - ŷ) / ((abs(y) + abs(ŷ) + ϵ) / 2)
 @inline sigmoid(x) = 1.0 / (1.0 + exp(-x))
 # @inline logit(x) = log(x / (1 - x))
 
-export sigmoid_scaled, logit_scaled
-@inline sigmoid_scaled(l::Real, h::Real, c::Real, z::Real; th::Real=2.0) = begin
+export tanh_scaled, atanh_scaled
+@inline tanh_scaled(l::Real, c::Real, h::Real, z::Real; th::Real=2.0) = begin
   @assert l < c < h "c out of range"
   d = log((c - l) / (h - c))
   # Large asymmetry makes the probabilities of the larger intervals infinitesimally small,
   # can't be used in optimiser params transformation or bayesian inference.
   @assert abs(d) < th "asymmetry is too large"
-  l + (h - l) * sigmoid(d + z)
+  l + (h - l) * (1 + tanh((d + z)/2)) / 2
 end
-logit_scaled(l::Real, h::Real, c::Real, x::Real; th::Real=2.0) = begin
+atanh_scaled(l::Real, c::Real, h::Real, x::Real; th::Real=2.0) = begin
   @assert l < c < h "c out of range"
   d = log((c - l) / (h - c))
   # Large asymmetry makes the probabilities of the larger intervals infinitesimally small,
   # can't be used in optimiser params transformation or bayesian inference.
   @assert abs(d) < th "asymmetry is too large"
   @assert l < x < h "x out of range"
-  logit((x - l) / (h - l)) - d
+  2atanh(2*(x - l)/(h - l) - 1) - d
 end
 
 

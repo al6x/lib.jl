@@ -12,12 +12,13 @@ struct TerminalLogger <: AbstractLogger
   min_level::LogLevel
   colors::Bool
   disabled::Set{String}
+  lock::ReentrantLock
 end
 
 TerminalLogger(;
   io=stderr, min_level::LogLevel=Info, colors::Bool=!haskey(ENV, "NO_COLOR"),
   disabled::Set{String}=disabled_from_env()
-) = TerminalLogger(io, min_level, colors, disabled)
+) = TerminalLogger(io, min_level, colors, disabled, ReentrantLock())
 
 install_logger!(; args...) = global_logger(TerminalLogger(; args...))
 
@@ -30,7 +31,7 @@ Logging.shouldlog(
 
 Logging.handle_message(
   log::TerminalLogger, level, message, _module, group, id, file, line; kwargs...
-) = begin
+) = lock(log.lock) do
   pairs = log_pairs(kwargs)
   id_i = findfirst(p -> p[1] in (:log_id, :_log_id), pairs)
   log_id = id_i === nothing ? "" : string(pairs[id_i][2])
