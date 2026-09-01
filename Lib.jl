@@ -6,6 +6,7 @@ using SpecialFunctions: loggamma
 using StatsFuns: logaddexp, logit
 
 include("Lib/vhash.jl")
+include("Lib/data.jl")
 
 export logit
 
@@ -18,7 +19,8 @@ macro p(ex)
   end
 end
 
-export dedent, configure!, unzip, spread, vhash, vhash!, get_cached,
+export dedent, configure!, unzip, spread, vhash, vhash!, to_data, from_data, to_data_struct,
+  from_data_struct, get_cached,
   smape, sigmoid, softabs, ensure_converged
 
 get_cached(make::Function, cache, key; max=nothing) = begin
@@ -34,23 +36,23 @@ smape(y, ŷ, ϵ = 1e-6) = abs(y - ŷ) / ((abs(y) + abs(ŷ) + ϵ) / 2)
 @inline sigmoid(x) = 1.0 / (1.0 + exp(-x))
 # @inline logit(x) = log(x / (1 - x))
 
-export tanh_scaled, atanh_scaled
-@inline tanh_scaled(l::Real, c::Real, h::Real, z::Real; th::Real=2.0) = begin
+export sigmoid_scaled, logit_scaled
+@inline sigmoid_scaled(l::Real, c::Real, h::Real, z::Real; th::Real=2.0) = begin
   @assert l < c < h "c out of range"
   d = log((c - l) / (h - c))
   # Large asymmetry makes the probabilities of the larger intervals infinitesimally small,
   # can't be used in optimiser params transformation or bayesian inference.
   @assert abs(d) < th "asymmetry is too large"
-  l + (h - l) * (1 + tanh((d + z)/2)) / 2
+  l + (h - l) * sigmoid(d + z)
 end
-atanh_scaled(l::Real, c::Real, h::Real, x::Real; th::Real=2.0) = begin
+logit_scaled(l::Real, c::Real, h::Real, x::Real; th::Real=2.0) = begin
   @assert l < c < h "c out of range"
   d = log((c - l) / (h - c))
   # Large asymmetry makes the probabilities of the larger intervals infinitesimally small,
   # can't be used in optimiser params transformation or bayesian inference.
   @assert abs(d) < th "asymmetry is too large"
   @assert l < x < h "x out of range"
-  2atanh(2*(x - l)/(h - l) - 1) - d
+  logit((x - l) / (h - l)) - d
 end
 
 
