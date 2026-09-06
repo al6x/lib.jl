@@ -2,10 +2,10 @@ module PlotsExt
 
 using JSON, VegaLite
 
-# redblue, coolwarm, icefire
+# redblue, bluered, coolwarm, icefire
 plot_xyc_by(
   title, ds; x, color=nothing, by=nothing, detail=nothing,
-  xdomain=nothing, ydomain=nothing, palette="viridis",
+  xdomain=nothing, ydomain=nothing, palette=:viridis, reverse_palette=false,
   xscale=nothing, yscale=nothing, pointsize=30, mark=:line_with_points,
 
   y=nothing, opacity=1.0,
@@ -42,8 +42,22 @@ plot_xyc_by(
   xscale_props = xdomain === nothing ? (type=xscale,) : (type=xscale, domain=xdomain)
   yscale_props = ydomain === nothing ? (type=yscale,) : (type=yscale, domain=ydomain)
 
-  color_props = color === nothing ? (;) :
-    (; color=(field=color, type=:ordinal, scale=(scheme=palette, reverse=true)))
+  # Palette
+  # Supporting bluered palette to make it easy to change color ordering
+  palette = string(palette)
+  if palette == "bluered"
+    palette = "redblue"
+    reverse_palette = !reverse_palette
+  end
+
+  color_props = if color === nothing; (;) else
+    # Showing colors only if there is multiple values, otherwise
+    # for some palettes the chart line is too pale.
+    count = length(Set(skipmissing(getproperty(ds, Symbol(color)))))
+    count <= 1 ? (;) :
+      (; color=(field=color, type=:ordinal,
+        scale=(scheme=palette, reverse=reverse_palette)))
+  end
   detail_props = detail === nothing ? (;) :
     (; detail=(field=detail, type=:ordinal))
 
