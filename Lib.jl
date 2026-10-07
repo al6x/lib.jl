@@ -61,10 +61,10 @@ end
 softabs(x, ϵ) = sqrt(x*x + ϵ*ϵ) - ϵ
 
 export softplus
-# @inline softplus(x, α) = log1p(exp(α*x)) / α
-@inline softplus(x, α) = begin
-  y = α * x
-  (max(y, 0) + log1p(exp(-abs(y)))) / α
+# Smooth max(x, 0), δ > 0 is the smoothing width in the same units as x.
+@inline softplus(x, δ) = begin
+  @assert δ > 0
+  max(x, 0) + δ*log1p(exp(-abs(x/δ)))
 end
 
 export softmax
@@ -131,7 +131,13 @@ end
 end
 
 
-round_any(x; opts...) = x
+round_struct(x::T; opts...) where {T} = begin
+  vals = ntuple(i -> getfield(x, i), fieldcount(T))
+  any(v -> v isa AbstractFloat, vals) || return x
+  T(ntuple(i -> vals[i] isa AbstractFloat ? round(vals[i]; opts...) : vals[i], length(vals))...)
+end
+
+round_any(x::T; opts...) where {T} = isstructtype(T) ? round_struct(x; opts...) : x
 round_any(x::AbstractFloat; opts...) = round(x; opts...)
 round_any(x::NamedTuple; opts...) = (; (k => round_any(v; opts...) for (k,v) in pairs(x))...)
 round_any(x::NTuple{N, Any}; opts...) where {N} = ntuple(i -> round_any(x[i]; opts...), N)

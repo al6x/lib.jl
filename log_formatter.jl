@@ -1,6 +1,8 @@
 using Logging
 
-const disabled_logs = Set{String}()
+const disabled_logs = Set{String}([
+  "VSCodeServer", "Base", "Precompilation", "Requires", "GR"
+])
 
 disable_logs!(args...) = begin
   for arg in args; push!(disabled_logs, string(arg)) end
@@ -16,11 +18,9 @@ struct TerminalLogger <: AbstractLogger
 end
 
 TerminalLogger(;
-  io=stderr, min_level::LogLevel=Info, colors::Bool=!haskey(ENV, "NO_COLOR"),
+  io=stderr, min_level::LogLevel=Debug, colors::Bool=!haskey(ENV, "NO_COLOR"),
   disabled::Set{String}=disabled_from_env()
 ) = TerminalLogger(io, min_level, colors, disabled, ReentrantLock())
-
-install_logger!(; args...) = global_logger(TerminalLogger(; args...))
 
 Logging.min_enabled_level(log::TerminalLogger) = log.min_level
 Logging.catch_exceptions(::TerminalLogger) = false
@@ -80,6 +80,7 @@ end
 
 module_name(_module) = last(split(string(_module), "."))
 format_module(_module) = lowercase(rpad(module_name(_module), 4)[1:4])
+# format_module(_module) = module_name(_module)
 
 level_prefix(level) = level == Debug || level == Info ? " " :
   level == Warn ? "W" : level == Error ? "E" : error("unknown log level: level=$level")

@@ -1,6 +1,6 @@
 module SkewTs
 
-import Statistics, SpecialFunctions, StatsFuns, Optim, Distributions, Random, ADTypes
+import Statistics, SpecialFunctions, StatsFuns, Optim, Distributions, Random, ADTypes, ForwardDiff
 import Distributions: logpdf, pdf, cdf, quantile, fit_mle
 import Random: rand
 import Statistics: mean, std, median

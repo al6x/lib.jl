@@ -2,10 +2,12 @@ module PlotsExt
 
 using JSON, VegaLite
 
-# redblue, bluered, coolwarm, icefire
+# redblue, bluered, redyellowblue, blueyellowred, coolwarm, icefire
 plot_xyc_by(
   title, ds; x, color=nothing, by=nothing, detail=nothing,
   xdomain=nothing, ydomain=nothing, palette=:viridis, reverse_palette=false,
+  colortype=:ordinal, colorscale=nothing,
+  xlabel=nothing, ylabel=nothing, colorlabel=nothing,
   xscale=nothing, yscale=nothing, pointsize=30, mark=:line_with_points,
 
   y=nothing, opacity=1.0,
@@ -42,21 +44,30 @@ plot_xyc_by(
   xscale_props = xdomain === nothing ? (type=xscale,) : (type=xscale, domain=xdomain)
   yscale_props = ydomain === nothing ? (type=yscale,) : (type=yscale, domain=ydomain)
 
+  x_label_props = xlabel === nothing ? (;) : (; title=xlabel)
+  y_label_props = ylabel === nothing ? (;) : (; title=ylabel)
+  color_label_props = colorlabel === nothing ? (;) : (; title=colorlabel)
+
   # Palette
-  # Supporting bluered palette to make it easy to change color ordering
   palette = string(palette)
   if palette == "bluered"
     palette = "redblue"
     reverse_palette = !reverse_palette
+  elseif palette == "redyellowblue"
+    palette = "spectral"
+  elseif palette == "blueyellowred"
+    palette = "spectral"
+    reverse_palette = !reverse_palette
   end
 
+  color_scale_props = colorscale === nothing ? (;) : (; type=colorscale)
   color_props = if color === nothing; (;) else
     # Showing colors only if there is multiple values, otherwise
     # for some palettes the chart line is too pale.
     count = length(Set(skipmissing(getproperty(ds, Symbol(color)))))
     count <= 1 ? (;) :
-      (; color=(field=color, type=:ordinal,
-        scale=(scheme=palette, reverse=reverse_palette)))
+      (; color=(field=color, type=colortype, color_label_props...,
+        scale=(scheme=palette, reverse=reverse_palette, color_scale_props...)))
   end
   detail_props = detail === nothing ? (;) :
     (; detail=(field=detail, type=:ordinal))
@@ -66,8 +77,11 @@ plot_xyc_by(
   poinsize_props = mark in (:point, :circle) ? (size=(value=npointsize,),) : (;)
 
   layers = []
+  # xaxis_props = temporal_x ? (; axis=(format="%Y-%m-%d", labelAngle=-45,
+  #   labelOverlap=:greedy, tickCount=max(2, round(Int, width/(by === nothing ? 1 : columns)/55)),
+  #   grid=true)) : (;)
   encoding_base = (
-    x = (field=x, type=xtype, scale=xscale_props),
+    x = (field=x, type=xtype, scale=xscale_props, x_label_props...),
     color_props...,
     detail_props...,
     poinsize_props...
@@ -78,7 +92,7 @@ plot_xyc_by(
       mark == :line_with_points ? (; type=:line, clip=true, point=true, opacity) :
       mark == :circle           ? (; type=:circle, clip=true, opacity) :
       (; type=mark, clip=true, opacity,)
-    encoding1 = (; encoding_base..., y = (field=y, type=ytype, scale=yscale_props))
+    encoding1 = (; encoding_base..., y = (field=y, type=ytype, scale=yscale_props, y_label_props...))
     push!(layers, (mark=mark_props1, encoding=encoding1,))
   end
 
@@ -92,7 +106,7 @@ plot_xyc_by(
 
     encoding = (;
       encoding_base...,
-      y = (field=yn, type=ytype, scale=yscale_props),
+      y = (field=yn, type=ytype, scale=yscale_props, y_label_props...),
     )
 
     push!(layers, (mark=mark_props, encoding,))
@@ -105,7 +119,7 @@ plot_xyc_by(
 
     encoding = (;
       encoding_base...,
-      y = (field=ylo, type=ytype, scale=yscale_props),
+      y = (field=ylo, type=ytype, scale=yscale_props, y_label_props...),
       y2 = (field=yhi,),
     )
 
@@ -116,14 +130,14 @@ plot_xyc_by(
   # Rulers
   for x in xrulers
     push!(layers, (;
-      mark=(; type=:rule, color=:grey),
-      encoding=(; x=(; datum=x, type=:quantitative, scale=xscale_props)),
+      mark=(; type=:rule, color=:grey, clip=true),
+      encoding=(; x=(; datum=x, type=:quantitative, scale=xscale_props, x_label_props...)),
     ))
   end
   for y in yrulers
     push!(layers, (;
-      mark=(; type=:rule, color=:grey,),
-      encoding=(; y=(; datum=y, type=:quantitative, scale=yscale_props)),
+      mark=(; type=:rule, color=:grey, clip=true),
+      encoding=(; y=(; datum=y, type=:quantitative, scale=yscale_props, y_label_props...)),
     ))
   end
 
