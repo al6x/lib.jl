@@ -82,24 +82,31 @@ quantile(d::SkewT, p::Real) = begin
   μ + σ*z
 end
 
-rand(rng::Random.AbstractRNG, d::SkewT) = quantile(d, rand(rng))
+rand(rng::Random.AbstractRNG, d::SkewT) = begin
+  (; μ, σ, ν, λ, a, b) = d
+  y = abs(rand(rng, Distributions.TDist(ν))) * sqrt((ν-2)/ν)
+  s = rand(rng) < (1+λ)/2 ? 1 : -1
+  μ + σ * (s*(1+s*λ)*y-a)/b
+end
 
 fit_mle_free(::Type{SkewT}, x::AbstractVector{<:Real}) = begin
-  min_ν = 2.051
+  min_ν, max_ν = 2.051, 1000.0
 
-  @inline decode(θ) = θ[1], exp(θ[2]), exp(θ[3]) + min_ν, tanh(θ[4])
+  @inline decode(θ) = θ[1], exp(θ[2]),
+    min_ν + (max_ν-min_ν)*StatsFuns.logistic(θ[3]), tanh(θ[4])
 
   nll(θ) = begin
     μ, σ, ν, λ = decode(θ)
-    if σ < 1e-12 || ν <= min_ν || abs(λ) >= 1 || ν > 100 return Inf end
+    if σ < 1e-12 || ν <= min_ν || abs(λ) >= 1 return Inf end
     d = SkewT(μ, σ, ν, λ)
     -sum(logpdf.(Ref(d), x))
   end
 
   # Sometimes it doens't converge, trying various inits
   inits = [
-    [mean(x), log(std(x) + 1e-6), log(5-min_ν), 0],
-    [median(x), log(median(abs.(x .- median(x))) + 1e-6), log(15-min_ν), 0]
+    [mean(x), log(std(x) + 1e-6), log((5-min_ν)/(max_ν-5)), 0],
+    [median(x), log(median(abs.(x .- median(x))) + 1e-6),
+      log((15-min_ν)/(max_ν-15)), 0]
   ]
 
   for init in inits
@@ -113,8 +120,8 @@ fit_mle_free(::Type{SkewT}, x::AbstractVector{<:Real}) = begin
 end
 
 fit_mle_fixed(::Type{SkewT}, x::AbstractVector{<:Real}; fix::NamedTuple) = begin
-  min_ν = 2.051
-  init_named = (μ=mean(x), σ=log(std(x)), ν=log(5-min_ν), λ=0)
+  min_ν, max_ν = 2.051, 1000.0
+  init_named = (μ=mean(x), σ=log(std(x)), ν=log((5-min_ν)/(max_ν-5)), λ=0)
   init = [init_named[k] for k in setdiff(keys(init_named), keys(fix))]
   init = Float64.(init) # To avoid mixing Dual with Float64
 
@@ -122,7 +129,7 @@ fit_mle_fixed(::Type{SkewT}, x::AbstractVector{<:Real}; fix::NamedTuple) = begin
     i=0
     μ = haskey(fix,:μ) ? fix[:μ] : Q[i+=1]
     σ = haskey(fix,:σ) ? fix[:σ] : exp(Q[i+=1])
-    ν = haskey(fix,:ν) ? fix[:ν] : exp(Q[i+=1]) + min_ν
+    ν = haskey(fix,:ν) ? fix[:ν] : min_ν + (max_ν-min_ν)*StatsFuns.logistic(Q[i+=1])
     λ = haskey(fix,:λ) ? fix[:λ] : tanh(Q[i+=1])
     μ, σ, ν, λ = promote(μ, σ, ν, λ) # To avoid mixing Dual with Float64
     (μ,σ,ν,λ)
@@ -130,7 +137,7 @@ fit_mle_fixed(::Type{SkewT}, x::AbstractVector{<:Real}; fix::NamedTuple) = begin
 
   nll(Q) = begin
     μ, σ, ν, λ = decode(Q)
-    if σ < 1e-12 || ν <= min_ν || abs(λ) >= 1 || ν > 100 return Inf end
+    if σ < 1e-12 || ν <= min_ν || abs(λ) >= 1 || ν > max_ν return Inf end
     d = SkewT(μ, σ, ν, λ)
     -sum(logpdf.(Ref(d), x))
   end

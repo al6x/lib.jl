@@ -4,18 +4,18 @@ using JSON, VegaLite
 
 # redblue, bluered, redyellowblue, blueyellowred, coolwarm, icefire
 plot_xyc_by(
-  title, ds; x, color=nothing, by=nothing, detail=nothing,
+  title, ds; x, color=nothing, by=nothing, detail=nothing, desc=nothing,
   xdomain=nothing, ydomain=nothing, palette=:viridis, reverse_palette=false,
   colortype=:ordinal, colorscale=nothing,
   xlabel=nothing, ylabel=nothing, colorlabel=nothing,
-  xscale=nothing, yscale=nothing, pointsize=30, mark=:line_with_points,
+  xscale=nothing, yscale=nothing, pointsize=60, mark=:line_with_points,
 
   y=nothing, opacity=1.0,
   y2=nothing, mark2=:line_with_points, opacity2=1.0,
   y3=nothing, mark3=:line_with_points, opacity3=1.0,
   bound::Union{Nothing, Tuple{Any, Any}}=nothing, opacity_bound=0.2,
 
-  xrulers=[], yrulers=[],
+  xrulers=[], yrulers=[], reference=nothing,
 
   xtype=:quantitative, ytype=:quantitative, resolve_y=nothing,
   columns = 3,
@@ -128,16 +128,29 @@ plot_xyc_by(
   bound !== nothing && add_ybound(bound..., opacity_bound)
 
   # Rulers
+  rule_transform = [(aggregate=[(op="count", as="n")],)]
   for x in xrulers
     push!(layers, (;
       mark=(; type=:rule, color=:grey, clip=true),
+      transform=rule_transform,
       encoding=(; x=(; datum=x, type=:quantitative, scale=xscale_props, x_label_props...)),
     ))
   end
   for y in yrulers
     push!(layers, (;
       mark=(; type=:rule, color=:grey, clip=true),
+      transform=rule_transform,
       encoding=(; y=(; datum=y, type=:quantitative, scale=yscale_props, y_label_props...)),
+    ))
+  end
+  if reference !== nothing
+    x1, y1, x2, y2 = reference
+    push!(layers, (;
+      mark=(; type=:rule, color=:grey, strokeDash=[4, 4], clip=true),
+      transform=rule_transform,
+      encoding=(;
+        x=(; datum=x1, type=:quantitative, scale=xscale_props), x2=(; datum=x2),
+        y=(; datum=y1, type=:quantitative, scale=yscale_props), y2=(; datum=y2))
     ))
   end
 
@@ -146,10 +159,13 @@ plot_xyc_by(
   width_prop  = by === nothing ? width  : ceil(Int, width/columns)
   height_prop = by === nothing ? height : ceil(Int, height/columns)
   resolve_props = resolve_y === nothing ? (;) : (; resolve=(; scale=(; y=resolve_y)))
+  desc_props = desc === nothing ? (;) : (; description=desc)
+  plot_title = desc === nothing ? ftitle : (; text=ftitle, subtitle=desc)
   vspec = by === nothing ?
-    (title=ftitle, layer=layers, width=width_prop, height=height_prop) :
-    (
-      title=ftitle,
+    (; desc_props..., title=plot_title, layer=layers, width=width_prop, height=height_prop) :
+    (;
+      desc_props...,
+      title=plot_title,
       facet=(field=String(by), type=:ordinal),
       columns,
       spec=(layer=layers, width=width_prop, height=height_prop),

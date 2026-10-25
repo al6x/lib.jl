@@ -50,7 +50,11 @@ end
 rand(rng::Random.AbstractRNG, d::NMix) = begin
   (; w, μ, σ) = d
   u = rand(rng)
-  i = u < w[1] ? 1 : (u < w[1] + w[2] ? 2 : 3)
+  i, c = 1, w[1]
+  while i < length(w) && u >= c
+    i += 1
+    c += w[i]
+  end
   μ[i] + σ[i] * randn(rng)
 end
 
@@ -116,6 +120,7 @@ end
   ws, ss
 end
 
+# loc and s are location and scale parameters, not mean and standard deviation.
 @inline tmix_logpdf(loc::Real, s::Real, ν::Real, x::Real) = begin
   @assert 0 < s s
   ws, ss = tmix_ws_ss(ν)
@@ -161,6 +166,7 @@ end
   ws, ss
 end
 
+# loc and scale (s) are location and scale parameters, not mean and standard deviation.
 @inline nigmix_logpdf(loc::Real, scale::Real, α::Real, x::Real) = begin
   @assert 0 < scale scale
   ws, ss = nigmix_ws_ss(α)
