@@ -131,12 +131,12 @@ fit(
     if parallel
       Threads.@threads for i in eachindex(inputs)
         ws = weights === nothing ? nothing : weights[i]
-        llhsw[i], countsw[i], llhs[i], counts[i] = Garch.llh(M, H, R, inputs[i], r2s[i]; weights=ws)
+        llhsw[i], countsw[i], llhs[i], counts[i] = Garch_old.llh(M, H, R, inputs[i], r2s[i]; weights=ws)
       end
     else
       for i in eachindex(inputs)
         ws = weights === nothing ? nothing : weights[i]
-        llhsw[i], countsw[i], llhs[i], counts[i] = Garch.llh(M, H, R, inputs[i], r2s[i]; weights=ws)
+        llhsw[i], countsw[i], llhs[i], counts[i] = Garch_old.llh(M, H, R, inputs[i], r2s[i]; weights=ws)
       end
     end
     fit_counts = counts
@@ -224,7 +224,7 @@ fit(
   let
     nllh, ntllh, llh, count = let
       llhs, counts, tllhs, tcounts = [begin
-        states = Garch.predict(M, H, R, it; include_warmup=false);
+        states = Garch_old.predict(M, H, R, it; include_warmup=false);
         llhs = states.llh
         llhsp = llhs |> skipmissing |> collect
 
