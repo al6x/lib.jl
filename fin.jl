@@ -138,54 +138,13 @@ rperiod(rs::Vector{<:Union{Missing,Float64}}; period::Int, overlap=false) = begi
   rsp, psp
 end
 
-garman_klass_rv(o::Float64, h::Float64, l::Float64, c::Float64) = begin
-  rv = 0.5 * log(h / l)^2 - (2 * log(2) - 1) * log(c / o)^2
-  @assert rv ≥ 0 "rv negative: $o, $h, $l, $c"
-  rv
-end
-
-garman_klass_rv(input::NamedTuple) = begin
-  (; o, h, l, c) = input; n = length(c)
-  [ismissing(o[t]) ? missing : garman_klass_rv(o[t], h[t], l[t], c[t]) for t in 1:n]
-end
-
-# Garman-Klass with Overnight
-overnight_rs_var(input::NamedTuple;
-  adj_gap=0.15,         # vol over weekends don't follow sqrt(T)
-  overnight_weight=0.01 # optimal weight found from garch fitting
-) = begin
-  (; o, h, l, c) = input
-  n = length(c)
-  @assert length(o) == length(h) == length(l) == n
-
-  rv = Vector{Union{Missing,Float64}}(undef, n)
-  fill!(rv, missing)
-
-  last = nothing  # last index with full OHLC present
-
-  @inbounds for t in 1:n
-    if ismissing(o[t]) || ismissing(h[t]) || ismissing(l[t]) || ismissing(c[t])
-      continue
-    end
-
-    # Garman–Klass (day t)
-    r_hl = log(h[t] / l[t])
-    r_co = log(c[t] / o[t])
-    gk   = 0.5 * r_hl^2 - (2log(2) - 1) * r_co^2
-
-    if last === nothing || ismissing(c[last])
-      rv[t] = missing
-    else
-      gap = t - last  # calendar index gap between observed days
-      u_full = log(o[t] / c[last])
-      u = u_full / sqrt(gap^adj_gap)
-      rv[t] = overnight_weight* u^2 + gk
-    end
-
-    last = t
-  end
-
-  rv
+# Returns a volatility proxy in log-return units, not variance or an unbiased estimator.
+# k=0.323 was fitted on SPY, can be tuned if needed.
+# Almost as good in our forecasting tests as the more complex overnight-adjusted Garman–Klass.
+ohlc_vol(o::Real, h::Real, l::Real, c::Real, c_prev::Real, k::Real=0.323) = begin
+  @assert 0 < l <= min(o, c) <= max(o, c) <= h && c_prev > 0
+  @assert k >= 0
+  log(h/l) + k*abs(log(o/c_prev))
 end
 
 @inline tdist_to_normal_approx_prepare(ν::Real) = begin

@@ -20,6 +20,14 @@ macro p(ex)
   end
 end
 
+export @show_as_ntuple
+macro show_as_ntuple(T)
+  quote
+    Base.show(io::IO, x::$(esc(T))) =
+      show(io, (; (k => getfield(x, k) for k in fieldnames(typeof(x)))...))
+  end
+end
+
 export dedent, configure!, unzip, spread, vhash, vhash!, to_data, from_data, to_data_struct,
   from_data_struct, get_cached,
   smape, sigmoid, softabs, ensure_converged,
